@@ -1,8 +1,8 @@
-
 use std::{fmt, ops::BitXor};
 
 use rand::{distributions::Standard, prelude::Distribution};
 use serde::{Deserialize, Serialize};
+use sha1::{Digest, Sha1};
 use thiserror::Error;
 
 pub const ID_LEN: usize = 20;
@@ -12,6 +12,43 @@ pub const ID_LEN: usize = 20;
 )]
 // Node IDs are chosen at random from the same 160-bit space as BitTorrent infohashes.
 pub struct Id(#[serde(with = "byte_array")] [u8; ID_LEN]);
+
+impl Id {
+  /// Create a DhtId by hashing the given bytes using SHA-1.
+  pub fn sha1(bytes: &[u8]) -> Self {
+    let hash = Sha1::digest(bytes);
+    Self(hash.into())
+  }
+
+  /// Flip the bit at the given index.
+  ///
+  /// # Panics
+  ///
+  /// Panics if index is out of bounds (>= 160).
+  pub fn flip_bit(self, index: usize) -> Self {
+    let mut bytes = self.0;
+    let (byte_index, bit_index) = (index / 8, index % 8);
+
+    let actual_bit_index = 7 - bit_index;
+    bytes[byte_index] ^= 1 << actual_bit_index;
+
+    bytes.into()
+  }
+
+  /// Number of leading zero bits.
+  pub fn leading_zeros(&self) -> u32 {
+    let mut bits = 0;
+
+    for byte in self.0 {
+      bits += byte.leading_zeros();
+
+      if byte != 0 {
+        break;
+      }
+    }
+    bits
+  }
+}
 
 impl AsRef<[u8]> for Id {
   fn as_ref(&self) -> &[u8] {
@@ -118,3 +155,54 @@ pub const NODE_ID_LEN: usize = ID_LEN;
 
 /// Length of a `InfoHash`.
 pub const INFO_HASH_LEN: usize = ID_LEN;
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn positive_no_leading_zeroes() {
+    let zero_bits = Id::from([0u8; ID_LEN]);
+    let one_bits = Id::from([255u8; ID_LEN]);
+
+    let xor_hash = zero_bits ^ one_bits;
+
+    assert_eq!(xor_hash.leading_zeros(), 0)
+  }
+
+  #[test]
+  fn positive_all_leading_zeroes() {
+    let first_one_bits = Id::from([255u8; ID_LEN]);
+    let second_one_bits = Id::from([255u8; ID_LEN]);
+
+    let xor_hash = first_one_bits ^ second_one_bits;
+
+    assert_eq!(xor_hash.leading_zeros() as usize, ID_LEN * 8);
+  }
+
+  #[test]
+  fn positive_one_leading_zero() {
+    let zero_bits = Id::from([0u8; ID_LEN]);
+
+    let mut bytes = [255u8; ID_LEN];
+    bytes[0] = 127;
+    let mostly_one_bits = Id::from(bytes);
+
+    let xor_hash = zero_bits ^ mostly_one_bits;
+
+    assert_eq!(xor_hash.leading_zeros(), 1);
+  }
+
+  #[test]
+  fn positive_one_trailing_zero() {
+    let zero_bits = Id::from([0u8; ID_LEN]);
+
+    let mut bytes = [255u8; ID_LEN];
+    bytes[super::ID_LEN - 1] = 254;
+    let mostly_zero_bits = Id::from(bytes);
+
+    let xor_hash = zero_bits ^ mostly_zero_bits;
+
+    assert_eq!(xor_hash.leading_zeros(), 0);
+  }
+}
