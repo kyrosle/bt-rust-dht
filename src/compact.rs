@@ -100,7 +100,7 @@ mod nodes {
   };
   use serde_bytes::ByteBuf;
 
-  use crate::{id::NodeId, node::NodeHandle};
+  use crate::{id::NodeId, routing::node::NodeHandle};
 
   pub fn serialize<S, const ADDR_LEN: usize>(
     nodes: &[NodeHandle],
@@ -157,7 +157,7 @@ mod nodes {
 pub mod nodes_v4 {
   use serde::{Deserializer, Serializer};
 
-  use crate::node::NodeHandle;
+  use crate::routing::node::NodeHandle;
 
   pub fn serialize<S>(nodes: &[NodeHandle], s: S) -> Result<S::Ok, S::Error>
   where
@@ -179,7 +179,7 @@ pub mod nodes_v4 {
 pub mod nodes_v6 {
   use serde::{Deserializer, Serializer};
 
-  use crate::node::NodeHandle;
+  use crate::routing::node::NodeHandle;
 
   pub fn serialize<S>(nodes: &[NodeHandle], s: S) -> Result<S::Ok, S::Error>
   where

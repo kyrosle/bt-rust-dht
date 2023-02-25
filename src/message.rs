@@ -19,7 +19,7 @@ use serde::{
 
 use crate::{
   id::{InfoHash, NodeId},
-  node::NodeHandle,
+  routing::node::NodeHandle,
 };
 
 /// DHT Queries: ping/find_node/get_peers/announce_peer
