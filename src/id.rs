@@ -7,10 +7,11 @@ use thiserror::Error;
 
 pub const ID_LEN: usize = 20;
 
+// Node IDs are chosen at random from the same 160-bit space as BitTorrent infohashes.
 #[derive(
   Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
 )]
-// Node IDs are chosen at random from the same 160-bit space as BitTorrent infohashes.
+#[repr(transparent)]
 pub struct Id(#[serde(with = "byte_array")] [u8; ID_LEN]);
 
 impl Id {

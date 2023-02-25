@@ -24,6 +24,7 @@ dependencies = [
  "pretty_assertions",
  "rand",
  "serde",
+ "serde_bencode",
  "serde_bencoded",
  "serde_bytes",
  "sha1",
@@ -214,6 +215,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb7d1f0d3021d347a83e556fc4683dea2ea09d87bccdf88ff5c12545d89d5efb"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde_bencode"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "934d8bdbaa0126dafaea9a8833424a211d9661897717846c6bb782349ca1c30d"
+dependencies = [
+ "serde",
+ "serde_bytes",
 ]
 
 [[package]]
