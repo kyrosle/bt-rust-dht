@@ -40,9 +40,9 @@ pub struct Message {
 
 impl Message {
   /// Decode the message from bencode.
-  /// 
-  /// `from_bytes_auto`: 
-  /// The same as from_bytes but deserialize_any will deserialize byte string as str 
+  ///
+  /// `from_bytes_auto`:
+  /// The same as from_bytes but deserialize_any will deserialize byte string as str
   /// if input bytes are valid UTF-8, otherwise as bytes.
   pub fn decode(input: &[u8]) -> Result<Self, serde_bencoded::DeError> {
     serde_bencoded::from_bytes_auto(input)

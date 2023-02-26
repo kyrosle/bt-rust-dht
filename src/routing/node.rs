@@ -51,7 +51,7 @@ impl Node {
     }
   }
 
-  /// Create a questionable node that has recently responded to us,
+  /// Create a questionable node that has recently responded to us before,
   /// but never requested from us.
   pub fn as_questionable(id: NodeId, addr: SocketAddr) -> Node {
     let last_response_offset = Duration::from_secs(MAX_LAST_SEEN_MINS * 60);
@@ -247,79 +247,91 @@ impl fmt::Debug for NodeHandle {
 
 #[cfg(test)]
 mod tests {
-    use std::time::{Duration, Instant};
+  use std::time::{Duration, Instant};
 
-    use crate::routing::node::{Node, NodeStatus};
-    use crate::test;
+  use crate::routing::node::{Node, NodeStatus};
+  use crate::test;
 
-    #[test]
-    fn positive_as_bad() {
-        let node = Node::as_bad(test::dummy_node_id(), test::dummy_socket_addr_v4());
+  #[test]
+  fn positive_as_bad() {
+    let node =
+      Node::as_bad(test::dummy_node_id(), test::dummy_socket_addr_v4());
 
-        assert_eq!(node.status(), NodeStatus::Bad);
+    assert_eq!(node.status(), NodeStatus::Bad);
+  }
+
+  #[test]
+  fn positive_as_questionable() {
+    let node = Node::as_questionable(
+      test::dummy_node_id(),
+      test::dummy_socket_addr_v4(),
+    );
+
+    assert_eq!(node.status(), NodeStatus::Questionable);
+  }
+
+  #[test]
+  fn positive_as_good() {
+    let node =
+      Node::as_good(test::dummy_node_id(), test::dummy_socket_addr_v4());
+
+    assert_eq!(node.status(), NodeStatus::Good);
+  }
+
+  #[test]
+  fn positive_request_renewal() {
+    let mut node = Node::as_questionable(
+      test::dummy_node_id(),
+      test::dummy_socket_addr_v4(),
+    );
+
+    node.remote_request();
+
+    assert_eq!(node.status(), NodeStatus::Good);
+  }
+
+  #[test]
+  fn positive_node_idle() {
+    let mut node =
+      Node::as_good(test::dummy_node_id(), test::dummy_socket_addr_v4());
+
+    let time_offset = Duration::from_secs(super::MAX_LAST_SEEN_MINS * 60);
+    let idle_time = Instant::now() - time_offset;
+
+    node.last_response = Some(idle_time);
+
+    assert_eq!(node.status(), NodeStatus::Questionable);
+  }
+
+  #[test]
+  fn positive_node_idle_reqeusts() {
+    let mut node = Node::as_questionable(
+      test::dummy_node_id(),
+      test::dummy_socket_addr_v4(),
+    );
+
+    for _ in 0..super::MAX_REFRESH_REQUESTS {
+      node.local_request();
     }
 
-    #[test]
-    fn positive_as_questionable() {
-        let node = Node::as_questionable(test::dummy_node_id(), test::dummy_socket_addr_v4());
+    assert_eq!(node.status(), NodeStatus::Bad);
+  }
 
-        assert_eq!(node.status(), NodeStatus::Questionable);
-    }
+  #[test]
+  fn positive_good_status_ordering() {
+    assert!(NodeStatus::Good > NodeStatus::Questionable);
+    assert!(NodeStatus::Good > NodeStatus::Bad);
+  }
 
-    #[test]
-    fn positive_as_good() {
-        let node = Node::as_good(test::dummy_node_id(), test::dummy_socket_addr_v4());
+  #[test]
+  fn positive_questionable_status_ordering() {
+    assert!(NodeStatus::Questionable > NodeStatus::Bad);
+    assert!(NodeStatus::Questionable < NodeStatus::Good);
+  }
 
-        assert_eq!(node.status(), NodeStatus::Good);
-    }
-
-    #[test]
-    fn positive_request_renewal() {
-        let mut node = Node::as_questionable(test::dummy_node_id(), test::dummy_socket_addr_v4());
-
-        node.remote_request();
-
-        assert_eq!(node.status(), NodeStatus::Good);
-    }
-
-    #[test]
-    fn positive_node_idle() {
-        let mut node = Node::as_good(test::dummy_node_id(), test::dummy_socket_addr_v4());
-
-        let time_offset = Duration::from_secs(super::MAX_LAST_SEEN_MINS * 60);
-        let idle_time = Instant::now() - time_offset;
-
-        node.last_response = Some(idle_time);
-
-        assert_eq!(node.status(), NodeStatus::Questionable);
-    }
-
-    #[test]
-    fn positive_node_idle_reqeusts() {
-        let mut node = Node::as_questionable(test::dummy_node_id(), test::dummy_socket_addr_v4());
-
-        for _ in 0..super::MAX_REFRESH_REQUESTS {
-            node.local_request();
-        }
-
-        assert_eq!(node.status(), NodeStatus::Bad);
-    }
-
-    #[test]
-    fn positive_good_status_ordering() {
-        assert!(NodeStatus::Good > NodeStatus::Questionable);
-        assert!(NodeStatus::Good > NodeStatus::Bad);
-    }
-
-    #[test]
-    fn positive_questionable_status_ordering() {
-        assert!(NodeStatus::Questionable > NodeStatus::Bad);
-        assert!(NodeStatus::Questionable < NodeStatus::Good);
-    }
-
-    #[test]
-    fn positive_bad_status_ordering() {
-        assert!(NodeStatus::Bad < NodeStatus::Good);
-        assert!(NodeStatus::Bad < NodeStatus::Questionable);
-    }
+  #[test]
+  fn positive_bad_status_ordering() {
+    assert!(NodeStatus::Bad < NodeStatus::Good);
+    assert!(NodeStatus::Bad < NodeStatus::Questionable);
+  }
 }
