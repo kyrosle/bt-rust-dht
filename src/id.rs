@@ -160,7 +160,7 @@ pub const INFO_HASH_LEN: usize = ID_LEN;
 #[cfg(test)]
 mod tests {
   use super::*;
-
+  use pretty_assertions::assert_eq;
   #[test]
   fn positive_no_leading_zeroes() {
     let zero_bits = Id::from([0u8; ID_LEN]);

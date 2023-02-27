@@ -248,6 +248,7 @@ impl fmt::Debug for NodeHandle {
 #[cfg(test)]
 mod tests {
   use std::time::{Duration, Instant};
+  use pretty_assertions::assert_eq;
 
   use crate::routing::node::{Node, NodeStatus};
   use crate::test;

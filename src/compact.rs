@@ -204,6 +204,7 @@ mod tests {
     fmt::Debug,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
   };
+  use pretty_assertions::assert_eq;
 
   #[test]
   fn encode_decode_values() {

@@ -578,6 +578,7 @@ pub mod error_code {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use pretty_assertions::assert_eq;
   use std::net::{Ipv4Addr, Ipv6Addr};
 
   #[test]
