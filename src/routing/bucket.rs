@@ -1,3 +1,8 @@
+//! Buckets are exists in each node.
+//!
+//! The routing table is subdivided into "buckets" that
+//! each cover a portion of the space.
+//!
 use std::{
   net::{Ipv4Addr, SocketAddr, SocketAddrV4},
   slice::Iter,
@@ -44,7 +49,7 @@ impl Bucket {
 
   /// Iterator over all good nodes and questionable nodes in the bucket.
   ///
-  /// that allows modifying the nodes.
+  /// That allows modifying the nodes.
   pub fn ping_able_nodes_mut(&mut self) -> impl Iterator<Item = &mut Node> {
     self.nodes.iter_mut().filter(|node| node.is_ping_able())
   }
@@ -67,15 +72,16 @@ impl Bucket {
 
   /// Attempt to add the given Node to the bucket if it is not in a bad state.
   ///
-  /// Returns false if the Node could not be placed in the bucket cos of it is full.
+  /// Returns false if the Node could not be placed in the bucket cos of this bucket is full.
   pub fn add_node(&mut self, new_node: Node) -> bool {
     let new_node_status = new_node.status();
+    // this node should not be added if the status is Bad.
     if new_node_status == NodeStatus::Bad {
       return true;
     }
 
-    // See if this node is already in the table, in that case replace it if
-    // it has a higher or equal status to the current node.
+    // See if this node is already in the table,
+    // in that case replace it if it has a higher or equal status to the current node.
     if let Some(index) = self.nodes.iter().position(|node| *node == new_node) {
       // Note, we can't just compare the status and if it's better or equal then
       // replace the old node with the new one. Doing so would erase information
@@ -95,7 +101,6 @@ impl Bucket {
 
     if let Some(index) = replace_index {
       self.nodes[index] = new_node;
-
       true
     } else {
       false

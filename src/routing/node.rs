@@ -1,3 +1,6 @@
+//! A node is a client/server listening on Udp port
+//! implementing the distributed hash table protocol.
+//!
 use std::fmt;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
@@ -164,11 +167,11 @@ impl Node {
   /// Nodes becomes bad when they fail to respond to multiple queries in a row.
   ///
   pub fn status(&self) -> NodeStatus {
-    let curr_time = Instant::now();
+    let current_time = Instant::now();
 
     // Check if node has ever responded to us.
     let since_response = match self.last_response {
-      Some(response_time) => curr_time - response_time,
+      Some(response_time) => current_time - response_time,
       None => return NodeStatus::Bad,
     };
 
@@ -184,7 +187,7 @@ impl Node {
 
     // Check if the node has recently requested to us.
     if let Some(request_time) = self.last_request {
-      let since_request = curr_time - request_time;
+      let since_request = current_time - request_time;
 
       if since_request < Duration::from_secs(MAX_LAST_SEEN_MINS * 60) {
         return NodeStatus::Good;
@@ -247,8 +250,8 @@ impl fmt::Debug for NodeHandle {
 
 #[cfg(test)]
 mod tests {
-  use std::time::{Duration, Instant};
   use pretty_assertions::assert_eq;
+  use std::time::{Duration, Instant};
 
   use crate::routing::node::{Node, NodeStatus};
   use crate::test;
@@ -297,7 +300,7 @@ mod tests {
       Node::as_good(test::dummy_node_id(), test::dummy_socket_addr_v4());
 
     let time_offset = Duration::from_secs(super::MAX_LAST_SEEN_MINS * 60);
-    let idle_time = Instant::now() - time_offset;
+    let idle_time = Instant::now().checked_sub(time_offset).unwrap();
 
     node.last_response = Some(idle_time);
 
@@ -305,7 +308,7 @@ mod tests {
   }
 
   #[test]
-  fn positive_node_idle_reqeusts() {
+  fn positive_node_idle_requests() {
     let mut node = Node::as_questionable(
       test::dummy_node_id(),
       test::dummy_socket_addr_v4(),

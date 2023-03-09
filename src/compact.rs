@@ -16,12 +16,12 @@ pub mod values {
   };
   use serde_bytes::{ByteBuf, Bytes};
 
-  pub fn serialize<S>(addrs: &[SocketAddr], s: S) -> Result<S::Ok, S::Error>
+  pub fn serialize<S>(address: &[SocketAddr], s: S) -> Result<S::Ok, S::Error>
   where
     S: Serializer,
   {
-    let mut seq = s.serialize_seq(Some(addrs.len()))?;
-    for addr in addrs {
+    let mut seq = s.serialize_seq(Some(address.len()))?;
+    for addr in address {
       seq.serialize_element(Bytes::new(&super::encode_socket_addr(addr)))?;
     }
     seq.end()
@@ -199,12 +199,12 @@ pub mod nodes_v6 {
 #[cfg(test)]
 mod tests {
   use crate::{id::NodeId, routing::node::NodeHandle};
+  use pretty_assertions::assert_eq;
   use serde::{Deserialize, Serialize};
   use std::{
     fmt::Debug,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
   };
-  use pretty_assertions::assert_eq;
 
   #[test]
   fn encode_decode_values() {
