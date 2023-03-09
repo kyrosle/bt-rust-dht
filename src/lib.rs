@@ -8,5 +8,7 @@ pub mod compact;
 pub mod id;
 pub mod message;
 pub mod routing;
+pub mod token;
+pub mod transaction;
 
 pub mod test;

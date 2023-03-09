@@ -172,7 +172,7 @@ fn bucket_placement(num_same_bits: usize, num_buckets: usize) -> usize {
   }
 }
 
-// ---------------------------------------------------- //
+// -------------------------- //
 
 // Iterator filter for only good nodes.
 type GoodNodes<'a> = Filter<Iter<'a, Node>, fn(&&Node) -> bool>;
@@ -403,7 +403,7 @@ fn index_is_in_bounds(length: usize, checked_index: Option<usize>) -> bool {
   }
 }
 
-// ---------------------------------- //
+// -------------------------- //
 
 #[cfg(test)]
 mod tests {
