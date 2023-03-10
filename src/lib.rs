@@ -10,5 +10,6 @@ pub mod message;
 pub mod routing;
 pub mod token;
 pub mod transaction;
+pub mod storage;
 
 pub mod test;
