@@ -1,6 +1,10 @@
 {
   "cSpell.words": [
+    "Bencode",
+    "bencoded",
+    "datagrams",
     "Hasher",
+    "thiserror",
     "unscalable"
   ]
 }

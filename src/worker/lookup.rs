@@ -1,0 +1,468 @@
+use std::{
+  collections::{HashMap, HashSet},
+  net::{Ipv4Addr, SocketAddr},
+  time::Duration,
+};
+
+use tokio::sync::mpsc;
+
+use crate::{
+  id::{Id, InfoHash, NODE_ID_LEN},
+  message::{GetPeersRequest, Message, MessageBody, Request, Response},
+  routing::{
+    bucket,
+    node::{Node, NodeHandle, NodeStatus},
+    table::RoutingTable,
+  },
+  transaction::{MIDGenerator, TransactionID},
+  IpVersion,
+};
+
+use super::{
+  socket::Socket,
+  timer::{Timeout, Timer},
+  ActionStatus, ScheduledTaskCheck,
+};
+
+const LOOKUP_TIMEOUT: Duration = Duration::from_millis(1500);
+const ENDGAME_TIMEOUT: Duration = Duration::from_millis(1500);
+
+// Currently using the aggressive variant of the standard lookup procedure.
+// https://people.kth.se/~rauljc/p2p11/jimenez2011subsecond.pdf
+
+// TODO: Handle case where a request round fails,
+// should we fail the whole lookup (clear active lookups?)
+// TODO: Clean up the code in this module.
+
+const INITIAL_PICK_NUM: usize = 4;
+const ITERATIVE_PICK_NUM: usize = 3;
+const ANNOUNCE_PICK_NUM: usize = 8;
+
+type Distance = Id;
+type DistanceToBeat = Id;
+
+pub struct TableLookup {
+  ip_version: IpVersion,
+  target_id: InfoHash,
+  in_endgame: bool,
+  // If w have received any values in the lookup.
+  recv_values: bool,
+  id_generator: MIDGenerator,
+  will_announce: bool,
+  // DistanceToBeat is the distance that the responses of the current lookup needs to beat,
+  // interestingly enough (and super important), this distance may not be equal to the
+  // requested nodes's distance.
+  active_lookups: HashMap<TransactionID, (DistanceToBeat, Timeout)>,
+  announce_tokens: HashMap<NodeHandle, Vec<u8>>,
+  requested_nodes: HashSet<NodeHandle>,
+  // Storing whether or not it has ever been pinged so that
+  // we can perform the brute force lookup if the lookup failed
+  all_sorted_nodes: Vec<(Distance, NodeHandle, bool)>,
+  // Send the found peers through this channel.
+  tx: mpsc::UnboundedSender<SocketAddr>,
+}
+
+// Gather nodes
+
+impl TableLookup {
+  pub fn new(
+    target_id: InfoHash,
+    will_announce: bool,
+    tx: mpsc::UnboundedSender<SocketAddr>,
+    id_generator: MIDGenerator,
+    table: &mut RoutingTable,
+    socket: &Socket,
+    timer: &mut Timer<ScheduledTaskCheck>,
+  ) -> TableLookup {
+    let mut all_sorted_nodes = Vec::with_capacity(bucket::MAX_BUCKET_SIZE);
+    for node in table
+      .closest_nodes(target_id)
+      .filter(|n| n.status() == NodeStatus::Good)
+      .take(bucket::MAX_BUCKET_SIZE)
+    {
+      insert_sorted_node(
+        &mut all_sorted_nodes,
+        target_id,
+        *node.handle(),
+        false,
+      );
+    }
+
+    // Call pick_initial_nodes function with the all_sorted_nodes list as an iterator
+    let initial_pick_nodes = pick_initial_nodes(all_sorted_nodes.iter_mut());
+    let initial_pick_nodes_filtered = initial_pick_nodes
+      .iter()
+      .filter(|(_, good)| *good)
+      .map(|(node, _)| {
+        let distance_to_beat = node.id ^ target_id;
+
+        (node, distance_to_beat)
+      });
+
+    // Construct the lookup table structure.
+    let mut table_lookup = TableLookup {
+      ip_version: socket.ip_version(),
+      target_id,
+      in_endgame: false,
+      recv_values: false,
+      id_generator,
+      will_announce,
+      all_sorted_nodes,
+      announce_tokens: HashMap::new(),
+      requested_nodes: HashSet::new(),
+      active_lookups: HashMap::with_capacity(INITIAL_PICK_NUM),
+      tx,
+    };
+
+    // Call start_request_round with the list of initial_nodes
+    // (return even if the search completed.. for now :D)
+    table_lookup
+  }
+
+  pub fn completed(&self) -> bool {
+    self.active_lookups.is_empty()
+  }
+
+  pub async fn recv_response(
+    &mut self,
+    node: Node,
+    trans_id: &TransactionID,
+    msg: Response,
+    table: &mut RoutingTable,
+    socket: &Socket,
+    timer: &mut Timer<ScheduledTaskCheck>,
+  ) -> ActionStatus {
+    // Process the message transaction id.
+    let (dist_to_beat, timeout) = if let Some(lookup) =
+      self.active_lookups.remove(trans_id)
+    {
+      lookup
+    } else {
+      log::debug!(
+        "{}: Received expired/unsolicited node response for an active table lookup",
+        self.ip_version
+      );
+      return self.current_lookup_status();
+    };
+
+    // Cancel the timeout (if this is not an endgame response)
+    if !self.in_endgame {
+      timer.cancel(timeout);
+    }
+
+    if let Some(token) = msg.token {
+      // Add the announce token to our list of tokens.
+      self.announce_tokens.insert(*node.handle(), token);
+    }
+
+    let nodes = match socket.ip_version() {
+      super::IpVersion::V4 => msg.nodes_v4,
+      super::IpVersion::V6 => msg.nodes_v6,
+    };
+
+    let values = msg.values;
+
+    // Check if we beat the distance, get the next distant to beat
+    let (iterator_nodes, next_dist_to_beat) = if !nodes.is_empty() {
+      let requested_nodes = &self.requested_nodes;
+
+      // Get the closest distance (or the current distance)
+      let next_dist_to_beat = nodes
+        .iter()
+        .filter(|node| !requested_nodes.contains(node))
+        .fold(dist_to_beat, |closest, node| {
+          let distance = self.target_id ^ node.id;
+
+          if distance < closest {
+            distance
+          } else {
+            closest
+          }
+        });
+
+      // Check if we got closer (equal to is not enough)
+      let iterator_nodes = if next_dist_to_beat < dist_to_beat {
+        let iterator_nodes = pick_iterator_nodes(
+          nodes
+            .iter()
+            .filter(|node| !requested_nodes.contains(node))
+            .copied(),
+          self.target_id,
+        );
+        Some(iterator_nodes)
+      } else {
+        for node in nodes {
+          insert_sorted_node(
+            &mut self.all_sorted_nodes,
+            self.target_id,
+            node,
+            false,
+          );
+        }
+
+        None
+      };
+
+      (iterator_nodes, next_dist_to_beat)
+    } else {
+      (None, dist_to_beat)
+    };
+
+    // Check if we need to iterate (not in the endgame already)
+    if !self.in_endgame {
+      if let Some(nodes) = iterator_nodes {
+        let filtered_nodes = nodes
+          .iter()
+          .filter(|(_, good)| *good)
+          .map(|(n, _)| (n, next_dist_to_beat));
+        self
+          .start_request_round(filtered_nodes, table, socket, timer)
+          .await;
+      }
+
+      // If there are not more active lookups, start the endgame
+      if self.active_lookups.is_empty() {
+        self.start_endgame_round(table, socket, timer).await;
+      }
+
+      for value in values {
+        self.tx.send(value).unwrap_or(())
+      }
+    }
+
+    self.current_lookup_status()
+  }
+
+  fn current_lookup_status(&self) -> ActionStatus {
+    if self.in_endgame || !self.active_lookups.is_empty() {
+      ActionStatus::Ongoing
+    } else {
+      ActionStatus::Completed
+    }
+  }
+
+  async fn start_request_round<'a, I>(
+    &mut self,
+    nodes: I,
+    table: &mut RoutingTable,
+    socket: &Socket,
+    timer: &mut Timer<ScheduledTaskCheck>,
+  ) where
+    I: Iterator<Item = (&'a NodeHandle, DistanceToBeat)>,
+  {
+    // Loop through the given nodes
+    let mut messages_sent = 0;
+
+    for (node, dist_to_beat) in nodes {
+      // Generate a transaction id for this message
+      let trans_id = self.id_generator.generate();
+
+      // Try to start a timeout for the node
+      let timeout = timer.schedule_in(
+        LOOKUP_TIMEOUT,
+        ScheduledTaskCheck::LookupTimeout(trans_id),
+      );
+
+      // Associate the transaction id with the distance the returned nodes must
+      // beat and the timeout token
+      self
+        .active_lookups
+        .insert(trans_id, (dist_to_beat, timeout));
+      // Send the message to the node
+      let get_peers_msg = Message {
+        transaction_id: trans_id.as_ref().to_vec(),
+        body: MessageBody::Request(Request::GetPeers(GetPeersRequest {
+          id: table.node_id(),
+          info_hash: self.target_id,
+          want: None,
+        })),
+      }
+      .encode();
+
+      if let Err(error) = socket.send(&get_peers_msg, node.addr).await {
+        log::error!(
+          "{}: Could not send a lookup message: {}",
+          self.ip_version,
+          error
+        )
+      }
+
+      // We requested from the node, mark it down
+      self.requested_nodes.insert(*node);
+
+      // Update the node in the routing table
+      if let Some(n) = table.find_node_mut(node) {
+        n.local_request()
+      }
+
+      messages_sent += 1;
+
+      if messages_sent == 0 {
+        self.active_lookups.clear()
+      }
+    }
+  }
+
+  async fn start_endgame_round(
+    &mut self,
+    table: &mut RoutingTable,
+    socket: &Socket,
+    timer: &mut Timer<ScheduledTaskCheck>,
+  ) -> ActionStatus {
+    // Entering the endgame phase
+    self.in_endgame = true;
+
+    // Try to start a global message timeout for the endgame
+    let timeout = timer.schedule_in(
+      ENDGAME_TIMEOUT,
+      ScheduledTaskCheck::LookupEndGame(self.id_generator.generate()),
+    );
+
+    if !self.recv_values {
+      for node_info in
+        self.all_sorted_nodes.iter_mut().filter(|(_, _, req)| !req)
+      {
+        let (node_dist, node, req) = node_info;
+
+        // Generate a transaction id for this message
+        let trans_id = self.id_generator.generate();
+
+        // Associate the transaction id with this node's distance and its timeout
+        // token we don't actually need to keep track of this information, but
+        // we do still need to filter out unsolicited responses by using the active_lookups map !!
+        self.active_lookups.insert(trans_id, (*node_dist, timeout));
+
+        // Send the message to the node
+        let get_peers_msg = Message {
+          transaction_id: trans_id.as_ref().to_vec(),
+          body: MessageBody::Request(Request::GetPeers(GetPeersRequest {
+            id: table.node_id(),
+            info_hash: self.target_id,
+            want: None,
+          })),
+        }
+        .encode();
+
+        if let Err(error) = socket.send(&get_peers_msg, node.addr).await {
+          log::error!(
+            "{}: Could not send an endgame message: {}",
+            self.ip_version,
+            error
+          );
+          continue;
+        }
+
+        // Mark that we requested form the in the RoutingTable
+        if let Some(n) = table.find_node_mut(node) {
+          n.local_request()
+        }
+
+        // Mark that we requested from the node
+        *req = true;
+      }
+    }
+
+    ActionStatus::Ongoing
+  }
+}
+
+fn pick_iterator_nodes<I>(
+  unsorted_nodes: I,
+  target_id: InfoHash,
+) -> [(NodeHandle, bool); ITERATIVE_PICK_NUM]
+where
+  I: Iterator<Item = NodeHandle>,
+{
+  let dummy_id = [0u8; NODE_ID_LEN].into();
+  let default = (
+    NodeHandle::new(dummy_id, SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0))),
+    false,
+  );
+
+  let mut pick_nodes = [default; ITERATIVE_PICK_NUM];
+  for node in unsorted_nodes {
+    insert_closest_nodes(&mut pick_nodes, target_id, node);
+  }
+
+  pick_nodes
+}
+
+fn insert_closest_nodes(
+  nodes: &mut [(NodeHandle, bool)],
+  target_id: InfoHash,
+  new_node: NodeHandle,
+) {
+  let new_distance = target_id ^ new_node.id;
+
+  for &mut (ref mut old_node, ref mut used) in nodes.iter_mut() {
+    if !*used {
+      *old_node = new_node;
+      *used = true;
+      return;
+    } else {
+      let old_distance = target_id ^ old_node.id;
+
+      if new_distance < old_distance {
+        *old_node = new_node;
+        return;
+      }
+    }
+  }
+}
+
+/// Picks a number of nodes from the sorted distance iterator to ping
+/// on the first round.
+fn pick_initial_nodes<'a, I>(
+  sorted_nodes: I,
+) -> [(NodeHandle, bool); INITIAL_PICK_NUM]
+where
+  I: Iterator<Item = &'a mut (Distance, NodeHandle, bool)>,
+{
+  let dummy_id = [0u8; NODE_ID_LEN].into();
+  let default = (
+    NodeHandle::new(dummy_id, SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0))),
+    false,
+  );
+
+  let mut pick_nodes = [default; INITIAL_PICK_NUM];
+  for (src, dst) in sorted_nodes.zip(pick_nodes.iter_mut()) {
+    dst.0 = src.1;
+    dst.1 = true;
+
+    // Mark that the node has been requested from
+    src.2 = true;
+  }
+
+  pick_nodes
+}
+
+/// Inserts the Node into the list of nodes based on its distance from the
+/// target node.
+///
+/// Nodes at the start of the list are closer to the target node than nodes
+/// at the end.
+fn insert_sorted_node(
+  nodes: &mut Vec<(Distance, NodeHandle, bool)>,
+  target: InfoHash,
+  node: NodeHandle,
+  pinged: bool,
+) {
+  let node_id = node.id;
+  let node_dist = target ^ node_id;
+
+  // Perform a search by distance from the target id
+  let search_result =
+    nodes.binary_search_by(|(dist, _, _)| dist.cmp(&node_dist));
+  match search_result {
+    Ok(dup_index) => {
+      // TODO: Bug here, what happens when multiple nodes with the same distance are
+      // present, but we don't get the index of the duplicate node (its in the list)
+      // from the search, then we would have a duplicate node in the list!
+      // Insert only if this node is different (it is ok if they have the same id)
+      if nodes[dup_index].1 != node {
+        nodes.insert(dup_index, (node_dist, node, pinged));
+      }
+    }
+    Err(ins_index) => nodes.insert(ins_index, (node_dist, node, pinged)),
+  }
+}
