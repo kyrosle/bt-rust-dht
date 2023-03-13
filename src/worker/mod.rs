@@ -1,7 +1,8 @@
-use std::io;
+use std::{collections::HashSet, io, net::SocketAddr, time::Duration};
 
-use crate::transaction::TransactionID;
+use crate::{id::InfoHash, transaction::TransactionID};
 use thiserror::Error;
+use tokio::sync::{mpsc, oneshot};
 
 mod bootstrap;
 mod handler;
@@ -34,6 +35,28 @@ impl std::fmt::Display for IpVersion {
   }
 }
 
+/// Task that our DHT will execute immediately.
+pub enum OneShotTask {
+  /// Load a new bootstrap operation into worker storage.
+  StartBootstrap(),
+  /// Check bootstrap status. The given sender will be notified
+  /// when the bootstrap completed.
+  /// with an optional timeout.
+  CheckBootstrap(oneshot::Sender<bool>, Option<Duration>),
+  /// Start a lookup for the given InfoHash.
+  StartLookup(StartLookup),
+  /// Get the local address the socket is bound to.
+  GetLocalAddr(oneshot::Sender<SocketAddr>),
+  /// Retrieve debug information
+  GetState(oneshot::Sender<State>),
+}
+
+pub struct StartLookup {
+  pub info_hash: InfoHash,
+  pub announce: bool,
+  pub tx: mpsc::UnboundedSender<SocketAddr>,
+}
+
 /// Signifies what has timed out in the TableBootstrap class.
 #[derive(Copy, Clone, Debug)]
 pub enum BootstrapTimeout {
@@ -63,6 +86,8 @@ pub enum WorkerError {
   #[error("invalid bencode data")]
   InvalidBencodeSer(#[source] serde_bencoded::SerError),
   #[error("received unsolicited response")]
+  UnsolicitedResponse,
+  #[error("invalid transaction id")]
   InvalidTransactionId,
   #[error("socket error")]
   SocketError(#[from] io::Error),
@@ -74,4 +99,20 @@ pub enum ActionStatus {
   Ongoing,
   /// Action Completed
   Completed,
+}
+
+pub async fn resolve(
+  routers: &HashSet<String>,
+  ip_v: IpVersion,
+) -> HashSet<SocketAddr> {
+  futures_util::future::join_all(routers.iter().map(tokio::net::lookup_host))
+    .await
+    .into_iter()
+    .filter_map(|result| result.ok())
+    .flatten()
+    .filter(|addr| match ip_v {
+      IpVersion::V4 => addr.is_ipv4(),
+      IpVersion::V6 => addr.is_ipv6(),
+    })
+    .collect()
 }

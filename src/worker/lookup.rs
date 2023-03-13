@@ -8,7 +8,10 @@ use tokio::sync::mpsc;
 
 use crate::{
   id::{Id, InfoHash, NODE_ID_LEN},
-  message::{GetPeersRequest, Message, MessageBody, Request, Response},
+  message::{
+    AnnouncePeerRequest, GetPeersRequest, Message, MessageBody, Request,
+    Response,
+  },
   routing::{
     bucket,
     node::{Node, NodeHandle, NodeStatus},
@@ -65,7 +68,7 @@ pub struct TableLookup {
 // Gather nodes
 
 impl TableLookup {
-  pub fn new(
+  pub async fn new(
     target_id: InfoHash,
     will_announce: bool,
     tx: mpsc::UnboundedSender<SocketAddr>,
@@ -116,6 +119,9 @@ impl TableLookup {
 
     // Call start_request_round with the list of initial_nodes
     // (return even if the search completed.. for now :D)
+    table_lookup
+      .start_request_round(initial_pick_nodes_filtered, table, socket, timer)
+      .await;
     table_lookup
   }
 
@@ -231,6 +237,85 @@ impl TableLookup {
     }
 
     self.current_lookup_status()
+  }
+
+  pub async fn recv_timeout(
+    &mut self,
+    trans_id: &TransactionID,
+    table: &mut RoutingTable,
+    socket: &Socket,
+    timer: &mut Timer<ScheduledTaskCheck>,
+  ) -> ActionStatus {
+    if self.active_lookups.remove(trans_id).is_none() {
+      log::warn!(
+        "{}: Received expired/unsolicited node timeout for an active table lookup",
+        self.ip_version
+      );
+      return self.current_lookup_status();
+    }
+
+    if !self.in_endgame {
+      // If there are not more active lookups, start the endgame
+      if self.active_lookups.is_empty() {
+        self.start_endgame_round(table, socket, timer).await;
+      }
+    }
+
+    self.current_lookup_status()
+  }
+
+  pub async fn recv_finished(
+    &mut self,
+    port: Option<u16>,
+    table: &mut RoutingTable,
+    socket: &Socket,
+  ) {
+    // Announce if we were told to
+    let announce_tokens = &self.announce_tokens;
+
+    for (_, node, _) in self
+      .all_sorted_nodes
+      .iter()
+      .filter(|(_, node, _)| announce_tokens.contains_key(node))
+      .take(ANNOUNCE_PICK_NUM)
+    {
+      let trans_id = self.id_generator.generate();
+      let token = announce_tokens.get(node).unwrap();
+
+      let announce_peer_req = AnnouncePeerRequest {
+        id: table.node_id(),
+        info_hash: self.target_id,
+        token: token.clone(),
+        port,
+      };
+      let announce_peer_msg = Message {
+        transaction_id: trans_id.as_ref().to_vec(),
+        body: MessageBody::Request(Request::AnnouncePeer(announce_peer_req)),
+      };
+      let announce_peer_msg = announce_peer_msg.encode();
+
+      match socket.send(&announce_peer_msg, node.addr).await {
+        Ok(()) => {
+          // We requested from the node, mark it down if the node is in our routing table
+          if let Some(n) = table.find_node_mut(node) {
+            n.local_request()
+          }
+        }
+        Err(error) => {
+          log::error!(
+            "{}: TableLookup announce request failed to send: {}",
+            self.ip_version,
+            error
+          )
+        }
+      }
+    }
+
+    // This may not be cleared since we didn't set a timeout
+    // for each node, any nodes that didn't respond would still
+    // be in here.
+    self.active_lookups.clear();
+    self.in_endgame = false;
   }
 
   fn current_lookup_status(&self) -> ActionStatus {

@@ -1,8 +1,5 @@
 use async_trait::async_trait;
-use std::{
-  io,
-  net::{SocketAddr, SocketAddrV4},
-};
+use std::{io, net::SocketAddr};
 use tokio::net::UdpSocket;
 
 use crate::{IpVersion, SocketTrait};

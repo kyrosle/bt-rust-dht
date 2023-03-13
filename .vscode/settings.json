@@ -4,6 +4,7 @@
     "bencoded",
     "datagrams",
     "Hasher",
+    "oneshot",
     "thiserror",
     "unscalable"
   ]
