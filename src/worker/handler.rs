@@ -126,14 +126,14 @@ impl DhtHandler {
         match message {
           Ok((buffer, addr)) => if let Err(error) = self.handle_incoming(&buffer, addr).await {
             log::debug!(
-              "{}: Failed to handle incoming message: {}", 
-              self.ip_version(), 
+              "{}: Failed to handle incoming message: {}",
+              self.ip_version(),
               error
             );
           }
           Err(error) => log::warn!(
-            "{}: Failed to receive incoming message: {}", 
-            self.ip_version(), 
+            "{}: Failed to receive incoming message: {}",
+            self.ip_version(),
             error
           ),
         }

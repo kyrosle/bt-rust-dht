@@ -12,7 +12,7 @@ use crate::{
     node::{NodeHandle, NodeStatus},
     table::{self, RoutingTable},
   },
-  transaction::{MIDGenerator, TransactionID, ActionID},
+  transaction::{ActionID, MIDGenerator, TransactionID},
   IpVersion,
 };
 
