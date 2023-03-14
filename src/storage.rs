@@ -219,7 +219,7 @@ mod tests {
     let mut announce_store = AnnounceStorage::new();
     let info_hash = [0u8; INFO_HASH_LEN].into();
     let sock_addr = test::dummy_socket_addr_v4();
-    
+
     assert!(announce_store.add_item(info_hash, sock_addr));
 
     let items: Vec<_> = announce_store.find_items(&info_hash).collect();

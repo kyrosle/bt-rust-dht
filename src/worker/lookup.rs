@@ -271,46 +271,47 @@ impl TableLookup {
     socket: &Socket,
   ) {
     // Announce if we were told to
-    let announce_tokens = &self.announce_tokens;
+    if self.will_announce {
+      let announce_tokens = &self.announce_tokens;
 
-    for (_, node, _) in self
-      .all_sorted_nodes
-      .iter()
-      .filter(|(_, node, _)| announce_tokens.contains_key(node))
-      .take(ANNOUNCE_PICK_NUM)
-    {
-      let trans_id = self.id_generator.generate();
-      let token = announce_tokens.get(node).unwrap();
+      for (_, node, _) in self
+        .all_sorted_nodes
+        .iter()
+        .filter(|(_, node, _)| announce_tokens.contains_key(node))
+        .take(ANNOUNCE_PICK_NUM)
+      {
+        let trans_id = self.id_generator.generate();
+        let token = announce_tokens.get(node).unwrap();
 
-      let announce_peer_req = AnnouncePeerRequest {
-        id: table.node_id(),
-        info_hash: self.target_id,
-        token: token.clone(),
-        port,
-      };
-      let announce_peer_msg = Message {
-        transaction_id: trans_id.as_ref().to_vec(),
-        body: MessageBody::Request(Request::AnnouncePeer(announce_peer_req)),
-      };
-      let announce_peer_msg = announce_peer_msg.encode();
+        let announce_peer_req = AnnouncePeerRequest {
+          id: table.node_id(),
+          info_hash: self.target_id,
+          token: token.clone(),
+          port,
+        };
+        let announce_peer_msg = Message {
+          transaction_id: trans_id.as_ref().to_vec(),
+          body: MessageBody::Request(Request::AnnouncePeer(announce_peer_req)),
+        };
+        let announce_peer_msg = announce_peer_msg.encode();
 
-      match socket.send(&announce_peer_msg, node.addr).await {
-        Ok(()) => {
-          // We requested from the node, mark it down if the node is in our routing table
-          if let Some(n) = table.find_node_mut(node) {
-            n.local_request()
+        match socket.send(&announce_peer_msg, node.addr).await {
+          Ok(()) => {
+            // We requested from the node, mark it down if the node is in our routing table
+            if let Some(n) = table.find_node_mut(node) {
+              n.local_request()
+            }
           }
-        }
-        Err(error) => {
-          log::error!(
-            "{}: TableLookup announce request failed to send: {}",
-            self.ip_version,
-            error
-          )
+          Err(error) => {
+            log::error!(
+              "{}: TableLookup announce request failed to send: {}",
+              self.ip_version,
+              error
+            )
+          }
         }
       }
     }
-
     // This may not be cleared since we didn't set a timeout
     // for each node, any nodes that didn't respond would still
     // be in here.

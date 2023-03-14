@@ -42,7 +42,7 @@ impl<T> Timer<T> {
     self.current.is_none() && self.queue.is_empty()
   }
 
-  /// Schedule the timers and add a new event with a deadline and a return value. 
+  /// Schedule the timers and add a new event with a deadline and a return value.
   pub fn schedule_in(&mut self, deadline: Duration, value: T) -> Timeout {
     self.schedule_at(Instant::now() + deadline, value)
   }

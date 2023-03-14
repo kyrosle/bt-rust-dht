@@ -126,14 +126,14 @@ impl DhtHandler {
         match message {
           Ok((buffer, addr)) => if let Err(error) = self.handle_incoming(&buffer, addr).await {
             log::debug!(
-              "{}: Failed to handle incoming message: {}", 
-              self.ip_version(), 
+              "{}: Failed to handle incoming message: {}",
+              self.ip_version(),
               error
             );
           }
           Err(error) => log::warn!(
-            "{}: Failed to receive incoming message: {}", 
-            self.ip_version(), 
+            "{}: Failed to receive incoming message: {}",
+            self.ip_version(),
             error
           ),
         }
@@ -147,7 +147,7 @@ impl DhtHandler {
         self.handle_start_bootstrap().await;
       }
       OneShotTask::CheckBootstrap(tx, timeout) => {
-        self.handle_check_bootstrap(tx, timeout);
+        self.handle_check_bootstrap(tx, timeout).await;
       }
       OneShotTask::StartLookup(lookup) => {
         self.handle_start_lookup(lookup).await;
@@ -675,4 +675,14 @@ fn add_nodes(
   nodes: &[NodeHandle],
   routers: &HashSet<SocketAddr>,
 ) {
+  if !routers.contains(&node.addr()) {
+    table.add_node(node.clone());
+  }
+
+  // Add the payload nodes as questionable
+  for node in nodes {
+    if !routers.contains(&node.addr) {
+      table.add_node(Node::as_questionable(node.id, node.addr));
+    }
+  }
 }

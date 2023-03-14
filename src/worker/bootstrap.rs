@@ -12,7 +12,7 @@ use crate::{
     node::{NodeHandle, NodeStatus},
     table::{self, RoutingTable},
   },
-  transaction::{MIDGenerator, TransactionID, ActionID},
+  transaction::{ActionID, MIDGenerator, TransactionID},
   IpVersion,
 };
 
@@ -267,7 +267,7 @@ impl TableBootstrap {
     match timeout {
       BootstrapTimeout::Transaction(trans_id) => {
         self
-          .handle_transaction_timout(table, socket, timer, &trans_id)
+          .handle_transaction_timeout(table, socket, timer, trans_id)
           .await
       }
       BootstrapTimeout::IdleWakeUp => {
@@ -276,7 +276,7 @@ impl TableBootstrap {
     }
   }
 
-  async fn handle_transaction_timout(
+  async fn handle_transaction_timeout(
     &mut self,
     table: &mut RoutingTable,
     socket: &Socket,

@@ -1,3 +1,4 @@
+pub use self::{handler::DhtHandler, socket::Socket};
 use std::{collections::HashSet, io, net::SocketAddr, time::Duration};
 
 use crate::{id::InfoHash, transaction::TransactionID};
