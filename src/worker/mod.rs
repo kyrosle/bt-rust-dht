@@ -1,9 +1,8 @@
-pub use self::{handler::DhtHandler, socket::Socket};
 use std::{collections::HashSet, io, net::SocketAddr, time::Duration};
-
-use crate::{id::InfoHash, transaction::TransactionID};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
+
+use crate::{id::InfoHash, transaction::TransactionID};
 
 mod bootstrap;
 mod handler;
@@ -11,6 +10,9 @@ mod lookup;
 mod refresh;
 mod socket;
 mod timer;
+
+// expose the `DhtHandler` and `Socket`
+pub use self::{handler::DhtHandler, socket::Socket};
 
 #[derive(Copy, Clone, Debug)]
 pub struct State {

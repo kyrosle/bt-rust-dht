@@ -141,7 +141,7 @@ impl Default for AnnounceStorage {
   }
 }
 
-// --- //
+// -------------------------- //
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct AnnounceItem {
   expiration: ItemExpiration,
@@ -167,7 +167,7 @@ impl AnnounceItem {
   }
 }
 
-// --- //
+// -------------------------- //
 const EXPIRATION_TIME: Duration = Duration::from_secs(25 * 60 * 60);
 
 #[derive(Debug, Clone, Eq)]

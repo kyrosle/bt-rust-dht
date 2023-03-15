@@ -31,7 +31,9 @@ const GOOD_NODE_THRESHOLD: usize = 10;
 
 const PINGS_PER_BUCKET: usize = 8;
 
+/// Bootstrap for startup the table-routing
 pub struct TableBootstrap {
+  // the ip address version v4 / v6.
   ip_version: IpVersion,
   table_id: NodeId,
   routers: HashSet<String>,

@@ -1,31 +1,41 @@
-//! Transaction IDs are going to be vital for both `scalability` and `performance
-//! concerns`. They allow us to both protect against unsolicited response as well
+//! Transaction IDs are going to be vital for both `scalability` and `performance`
+//! concerns. They allow us to both protect against unsolicited response as well
 //! as dropping those messages as soon as possible.
 //!
 //! We are taking an absurdly large, lazily generate, RingBuffer
 //! approach to generating transaction ids.
 //!
-//! We are going for a simple,
-//! stateless (for the most part) implementation for generating
-//! the transaction ids. We chose to go this route
-//! because 1, we don't want to reuse transaction ids used in recent requests
-//! that had subsequent responses as well because this would be reusing it soon.
-//! And 2,
-//! that makes for an unscalable approach unless we also have a timeout for ids
-//! that we never received responses for which would lend itself to messy code.
+//! We are going for a simple, stateless (for the most part) implementation
+//! for generating the transaction ids.
+//!
+//! We chose to go this route, because:
+//!
+//! - we don't want to reuse transaction ids used in recent requests
+//!   that had subsequent responses as well because this would be reusing it soon.
+//!
+//! - that makes for an unscalable approach unless we also have a timeout for ids
+//!   that we never received responses for which would lend itself to messy code.
 //!
 //! Instead, we are going to pre-allocate a chunk of ids, shuffle them,
 //! and use them until they run out, then pre-allocate some more, shuffle them, and use them.
-//! When we run out, (which won't happen for a VERY long time)
+//! When we run out (which won't happen for a VERY long time),
 //! we will simply wrap around. Also, we are going to break down the transaction id,
 //! so our transaction id will be made up of the `first 5 bytes` which will be the
 //! `action id`, this would be something like a individual lookup, a bucket refresh, or a bootstrap.
 //! Now, each of those actions have a number of message associated which them,
-//! this is where the `last 3 bytes` come in which will be the message id.
+//! this is where the `last 3 bytes` come in which will be the `message id`.
 //! This allows us to route message appropriately and associate them with some
-//! action we are performing right down to a message that the action is
-//! expecting. The pre-allocation strategy is used both on the action id level as
-//! well as the message id level.
+//! action we are performing right down to a message that the action is expecting.
+//!
+//! The pre-allocation strategy is used both on the `action id` level as
+//! well as the `message id` level.
+//!
+//! ```
+//! +---------------+----------+
+//! |   action id   |message id|
+//! +---------------+----------+
+//!    5 bytes        3 bytes
+//! ```
 //!
 //! To protect against timing attacks, where recently pinged nodes got our transaction
 //! id and wish to guess other transaction ids in the block that we may have
@@ -65,10 +75,14 @@ const ACTION_ID_PRE_ALLOC_LEN: usize = 16;
 #[cfg(test)]
 const MESSAGE_ID_PRE_ALLOC_LEN: usize = 16;
 
+/// Helper for generating the action ids.
 pub struct AIDGenerator {
   // NOT SHIFTED, so that we can warp around manually!
+  /// In next turn, the number which the ids array would start.
   next_alloc: u64,
+  /// a current index that the ids should give out.
   current_index: usize,
+  /// a array contain a pre-allocated action ids block.
   action_ids: [u64; ACTION_ID_PRE_ALLOC_LEN],
 }
 
@@ -88,6 +102,8 @@ impl Default for AIDGenerator {
 }
 
 impl AIDGenerator {
+  /// Pick a suitable action ids, and then put it into the `MidGenerator`
+  /// which would be used to finally build the transaction id.
   pub fn generate(&mut self) -> MIDGenerator {
     let opt_action_id = self.action_ids.get(self.current_index).copied();
 
@@ -95,6 +111,7 @@ impl AIDGenerator {
       self.current_index += 1;
 
       // Shift the action id to make room for the message id.
+      // for match the transaction ids format.
       MIDGenerator::new(action_id << MESSAGE_ID_SHIFT)
     } else {
       // Get a new block of action ids.
@@ -103,16 +120,24 @@ impl AIDGenerator {
       // Randomize the order of ids.
       action_ids.shuffle(&mut rand::thread_rng());
 
+      // reset the generator state
       self.next_alloc = next_alloc;
       self.action_ids = action_ids;
       self.current_index = 0;
 
+      // and then recall the generate method.Next time, the opt_action_id would not be None.
       self.generate()
     }
   }
 }
 
-// (next_alloc, aids)
+/// Helping for generating the action ids array, at the length fo `ACTION_ID_PRE_ALLOC_LEN`.
+///
+/// Return the tuple: (next_alloc, ids array).
+///
+/// next_alloc: the next time the number of ids will start.
+///
+/// action ids array: [ next_alloc, next_alloc + pre_alloc_len )
 fn generate_aids(next_alloc: u64) -> (u64, [u64; ACTION_ID_PRE_ALLOC_LEN]) {
   // check if we need to wrap.
   let (next_alloc_start, next_alloc_end) = if next_alloc == MAX_ACTION_ID {
@@ -156,6 +181,8 @@ impl MIDGenerator {
     ActionID::from_transaction_id(self.action_id)
   }
 
+  /// Generate the transaction id with the action id which accepted from new method,
+  /// and the shuffled message id.
   pub fn generate(&mut self) -> TransactionID {
     let opt_message_id = self.message_ids.get(self.current_index).copied();
 
@@ -179,6 +206,7 @@ impl MIDGenerator {
   }
 }
 
+/// Helping for generating the mids
 // (next_alloc, mids)
 fn generate_mids(next_alloc: u64) -> (u64, [u64; MESSAGE_ID_PRE_ALLOC_LEN]) {
   let (next_alloc_start, next_alloc_end) = if next_alloc == MAX_MESSAGE_ID {
@@ -197,6 +225,15 @@ fn generate_mids(next_alloc: u64) -> (u64, [u64; MESSAGE_ID_PRE_ALLOC_LEN]) {
 }
 
 // -------------------------- //
+
+/// The transaction id format would like:
+///
+/// ```
+/// +---------------+----------+
+/// |   action id   |message id|
+/// +---------------+----------+
+///    5 bytes        3 bytes
+/// ```
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct TransactionID {
   bytes: [u8; TRANSACTION_ID_BYTES],
@@ -232,6 +269,21 @@ impl AsRef<[u8]> for TransactionID {
 
 // -------------------------- //
 
+/// In a Distributed Hash Table (DHT), 
+/// an action ID is a unique identifier that is associated with a 
+/// particular operation or action performed on the DHT network. 
+/// 
+/// When a node in the DHT network initiates an action, 
+/// such as adding or retrieving data from the network, 
+/// it generates a unique action ID that is used to track the progress of that action.
+/// 
+/// The action ID is important because it allows other nodes in the network to identify and respond to the action. 
+/// For example, if a node initiates a data retrieval action with a specific action ID, 
+/// other nodes can respond with the requested data if they have it, or with an error message if they don't.
+/// 
+/// In general, the action ID is a randomly generated value that is chosen by the initiating node. 
+/// It should be unique enough to avoid collisions with other action IDs in the network, 
+/// but doesn't need to have any particular format or structure.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ActionID {
   action_id: u64,
@@ -247,7 +299,24 @@ impl ActionID {
     }
   }
 }
+
 // -------------------------- //
+
+/// In computer networking, a message ID is a unique identifier assigned to a message or packet 
+/// that is transmitted across a network. It is used to distinguish one message from another,
+/// even if they have the same source and destination addresses.
+/// 
+/// The message ID is typically a numerical value that is assigned by the sending node.
+/// It is included in the header of the message, along with other information 
+/// such as the source and destination addresses, protocol type, and other control information.
+/// 
+/// The message ID is important because it allows the receiving node to track the progress of 
+/// the message and to ensure that it has received all of the packets in the correct order. 
+/// If a packet is lost or corrupted during transmission,
+/// the receiving node can request a retransmission of the packet using the message ID.
+/// 
+/// In some protocols, the message ID may also be used to prevent duplicate messages from being transmitted,
+/// as each message is associated with a unique identifier.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct MessageID {
   message_id: u64,
