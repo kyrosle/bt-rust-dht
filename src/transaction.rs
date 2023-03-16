@@ -269,20 +269,20 @@ impl AsRef<[u8]> for TransactionID {
 
 // -------------------------- //
 
-/// In a Distributed Hash Table (DHT), 
-/// an action ID is a unique identifier that is associated with a 
-/// particular operation or action performed on the DHT network. 
-/// 
-/// When a node in the DHT network initiates an action, 
-/// such as adding or retrieving data from the network, 
+/// In a Distributed Hash Table (DHT),
+/// an action ID is a unique identifier that is associated with a
+/// particular operation or action performed on the DHT network.
+///
+/// When a node in the DHT network initiates an action,
+/// such as adding or retrieving data from the network,
 /// it generates a unique action ID that is used to track the progress of that action.
-/// 
-/// The action ID is important because it allows other nodes in the network to identify and respond to the action. 
-/// For example, if a node initiates a data retrieval action with a specific action ID, 
+///
+/// The action ID is important because it allows other nodes in the network to identify and respond to the action.
+/// For example, if a node initiates a data retrieval action with a specific action ID,
 /// other nodes can respond with the requested data if they have it, or with an error message if they don't.
-/// 
-/// In general, the action ID is a randomly generated value that is chosen by the initiating node. 
-/// It should be unique enough to avoid collisions with other action IDs in the network, 
+///
+/// In general, the action ID is a randomly generated value that is chosen by the initiating node.
+/// It should be unique enough to avoid collisions with other action IDs in the network,
 /// but doesn't need to have any particular format or structure.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ActionID {
@@ -302,19 +302,19 @@ impl ActionID {
 
 // -------------------------- //
 
-/// In computer networking, a message ID is a unique identifier assigned to a message or packet 
+/// In computer networking, a message ID is a unique identifier assigned to a message or packet
 /// that is transmitted across a network. It is used to distinguish one message from another,
 /// even if they have the same source and destination addresses.
-/// 
+///
 /// The message ID is typically a numerical value that is assigned by the sending node.
-/// It is included in the header of the message, along with other information 
+/// It is included in the header of the message, along with other information
 /// such as the source and destination addresses, protocol type, and other control information.
-/// 
-/// The message ID is important because it allows the receiving node to track the progress of 
-/// the message and to ensure that it has received all of the packets in the correct order. 
+///
+/// The message ID is important because it allows the receiving node to track the progress of
+/// the message and to ensure that it has received all of the packets in the correct order.
 /// If a packet is lost or corrupted during transmission,
 /// the receiving node can request a retransmission of the packet using the message ID.
-/// 
+///
 /// In some protocols, the message ID may also be used to prevent duplicate messages from being transmitted,
 /// as each message is associated with a unique identifier.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]

@@ -434,7 +434,7 @@ mod tests {
     // Trigger a bucket overflow and since the ids are placed in the last bucket, all of
     // the buckets will be recursively created and inserted into the list of all buckets.
     let block_addrs =
-      test::dummy_block_socket_addrs((bucket::MAX_BUCKET_SIZE + 1) as u16);
+      test::dummy_block_socket_address((bucket::MAX_BUCKET_SIZE + 1) as u16);
     for block_addr in block_addrs {
       let node = Node::as_good(node_id.into(), block_addr);
 
@@ -463,7 +463,7 @@ mod tests {
     node_id[0] |= 128;
 
     let block_addrs =
-      test::dummy_block_socket_addrs((bucket::MAX_BUCKET_SIZE + 1) as u16);
+      test::dummy_block_socket_address((bucket::MAX_BUCKET_SIZE + 1) as u16);
     for block_addr in block_addrs {
       let node = Node::as_good(node_id.into(), block_addr);
 
@@ -496,7 +496,7 @@ mod tests {
     node_id[NODE_ID_LEN - 1] = 0;
 
     let block_addrs =
-      test::dummy_block_socket_addrs((bucket::MAX_BUCKET_SIZE + 1) as u16);
+      test::dummy_block_socket_address((bucket::MAX_BUCKET_SIZE + 1) as u16);
     for block_addr in block_addrs {
       let node = Node::as_good(node_id.into(), block_addr);
 
@@ -528,7 +528,7 @@ mod tests {
     let mut table = RoutingTable::new(table_id);
 
     let block_addrs =
-      test::dummy_block_socket_addrs(bucket::MAX_BUCKET_SIZE as u16);
+      test::dummy_block_socket_address(bucket::MAX_BUCKET_SIZE as u16);
     for bit_flip_index in 0..table::MAX_BUCKETS {
       for block_addr in &block_addrs {
         let bucket_node_id = table_id.flip_bit(bit_flip_index);

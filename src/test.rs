@@ -23,7 +23,7 @@ pub fn dummy_socket_addr_v4() -> SocketAddr {
 }
 
 /// Generates a block of unique ipv4 addresses as `Vec<SocketAddr>`
-pub fn dummy_block_socket_addrs(num_addrs: u16) -> Vec<SocketAddr> {
+pub fn dummy_block_socket_address(num_addrs: u16) -> Vec<SocketAddr> {
   let mut addr_block = Vec::with_capacity(num_addrs as usize);
 
   for port in 0..num_addrs {

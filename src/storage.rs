@@ -6,7 +6,9 @@ use std::{
 
 use crate::id::InfoHash;
 
-const MAX_ITEMS_STORED: usize = 501;
+const MAX_ITEMS_STORED: usize = 500;
+
+/// Storing the Announce Item mapping with its InfoHash.
 pub struct AnnounceStorage {
   storage: HashMap<InfoHash, Vec<AnnounceItem>>,
   expires: Vec<ItemExpiration>,
@@ -25,6 +27,9 @@ impl AnnounceStorage {
     self.add(info_hash, address, Instant::now())
   }
 
+  /// Add the contact.
+  ///
+  /// Return true if this contact can be store in `storage` or `expires`, otherwise.
   fn add(
     &mut self,
     info_hash: InfoHash,
@@ -39,13 +44,17 @@ impl AnnounceStorage {
 
     // Check if we already have the item and want to update
     match self.insert_contact(item) {
+      // can not insert this announce item, because it is exit.
       Some(true) => {
+        // remove fist, O(n).
         self.expires.retain(|i| i != &item_expiration);
+        // re-push in into the Vec<ItemExpiration>
         self.expires.push(item_expiration);
 
         true
       }
       Some(false) => {
+        // push into the expires as a copy.
         self.expires.push(item_expiration);
 
         true
@@ -54,6 +63,9 @@ impl AnnounceStorage {
     }
   }
 
+  /// Find out the announce items have not expired and they are belong to this info_hash.
+  ///
+  /// Return a iterator of SocketAddr.
   pub fn find_items<'a>(
     &'a mut self,
     info_hash: &'_ InfoHash,
@@ -77,6 +89,9 @@ impl AnnounceStorage {
       .map(|item| item.address())
   }
 
+  /// Accepting a announce item, meaning this the life time of this contact.
+  ///
+  /// Check the existence of this announce item and whether here will overflow the capacity if inserting it.
   fn insert_contact(&mut self, item: AnnounceItem) -> Option<bool> {
     let item_info_hash = item.info_hash();
 
@@ -87,7 +102,9 @@ impl AnnounceStorage {
         false
       };
 
+    // (already exist? , overflow the max capacity?)
     match (already_in_list, self.expires.len() < MAX_ITEMS_STORED) {
+      // Haven't existed and has capacity to insert in.
       (false, true) => {
         // Place it into the appropriate list
         match self.storage.entry(item_info_hash) {
@@ -107,6 +124,7 @@ impl AnnounceStorage {
 
   /// Prunes all expired items from the internal list.
   fn remove_expired_items(&mut self, current_time: Instant) {
+    // count the number of expired announce items.
     let num_expired_items = self
       .expires
       .iter()
@@ -121,13 +139,15 @@ impl AnnounceStorage {
       // that are associated with the expiration (should only be one such contract).
       let remove_info_hash =
         if let Some(items) = self.storage.get_mut(&info_hash) {
+          // remove the expired announce item from the Hashmap recording Array.
           items.retain(|a| a.expiration() != item_expiration);
+          // if the info_hash entry has not announce item now, here will return true value, then we should remove it.
           items.is_empty()
         } else {
           false
         };
 
-      // If we drained the list of contacts completely, remove the info_hash entry
+      // If we drained the list of contacts completely, remove the info_hash entry.
       if remove_info_hash {
         self.storage.remove(&info_hash);
       }
@@ -142,6 +162,8 @@ impl Default for AnnounceStorage {
 }
 
 // -------------------------- //
+
+/// Warping a expiration item.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct AnnounceItem {
   expiration: ItemExpiration,
@@ -168,6 +190,7 @@ impl AnnounceItem {
 }
 
 // -------------------------- //
+
 const EXPIRATION_TIME: Duration = Duration::from_secs(25 * 60 * 60);
 
 #[derive(Debug, Clone, Eq)]
@@ -232,10 +255,10 @@ mod tests {
   fn positive_add_and_retrieve_contacts() {
     let mut announce_store = AnnounceStorage::new();
     let info_hash = [0u8; INFO_HASH_LEN].into();
-    let sock_addrs =
-      test::dummy_block_socket_addrs(storage::MAX_ITEMS_STORED as u16);
+    let sock_address =
+      test::dummy_block_socket_address(storage::MAX_ITEMS_STORED as u16);
 
-    for sock_addr in sock_addrs.iter() {
+    for sock_addr in sock_address.iter() {
       assert!(announce_store.add_item(info_hash, *sock_addr));
     }
 
@@ -243,7 +266,7 @@ mod tests {
     assert_eq!(items.len(), storage::MAX_ITEMS_STORED);
 
     for item in items.iter() {
-      assert!(sock_addrs.iter().any(|s| s == item));
+      assert!(sock_address.iter().any(|s| s == item));
     }
   }
 
@@ -251,48 +274,48 @@ mod tests {
   fn positive_renew_contacts() {
     let mut announce_store = AnnounceStorage::new();
     let info_hash = [0u8; INFO_HASH_LEN].into();
-    let sock_addrs =
-      test::dummy_block_socket_addrs((storage::MAX_ITEMS_STORED + 1) as u16);
+    let sock_address =
+      test::dummy_block_socket_address((storage::MAX_ITEMS_STORED + 1) as u16);
 
-    for sock_addr in sock_addrs.iter().take(storage::MAX_ITEMS_STORED) {
+    for sock_addr in sock_address.iter().take(storage::MAX_ITEMS_STORED) {
       assert!(announce_store.add_item(info_hash, *sock_addr));
     }
 
     // Try to add a new item
     let other_info_hash = [1u8; INFO_HASH_LEN].into();
 
-    // Returns false because it wasnt added
+    // Returns false because it wasn't added
     assert!(!announce_store
-      .add_item(other_info_hash, sock_addrs[sock_addrs.len() - 1]));
-    // Iterator is empty because it wasnt added
+      .add_item(other_info_hash, sock_address[sock_address.len() - 1]));
+    // Iterator is empty because it wasn't added
     let count = announce_store.find_items(&other_info_hash).count();
     assert_eq!(count, 0);
 
     // Try to add all of the initial nodes again (renew)
-    for sock_addr in sock_addrs.iter().take(storage::MAX_ITEMS_STORED) {
+    for sock_addr in sock_address.iter().take(storage::MAX_ITEMS_STORED) {
       assert!(announce_store.add_item(info_hash, *sock_addr));
     }
   }
 
   #[test]
-  fn positive_full_storage_expire_one_infohash() {
+  fn positive_full_storage_expire_one_info_hash() {
     let mut announce_store = AnnounceStorage::new();
     let info_hash = [0u8; INFO_HASH_LEN].into();
-    let sock_addrs =
-      test::dummy_block_socket_addrs((storage::MAX_ITEMS_STORED + 1) as u16);
+    let sock_address =
+      test::dummy_block_socket_address((storage::MAX_ITEMS_STORED + 1) as u16);
 
     // Fill up the announce storage completely
-    for sock_addr in sock_addrs.iter().take(storage::MAX_ITEMS_STORED) {
+    for sock_addr in sock_address.iter().take(storage::MAX_ITEMS_STORED) {
       assert!(announce_store.add_item(info_hash, *sock_addr));
     }
 
     // Try to add a new item into the storage (under a different info hash)
     let other_info_hash = [1u8; INFO_HASH_LEN].into();
 
-    // Returned false because it wasnt added
+    // Returned false because it wasn't added
     assert!(!announce_store
-      .add_item(other_info_hash, sock_addrs[sock_addrs.len() - 1]));
-    // Iterator is empty because it wasnt added
+      .add_item(other_info_hash, sock_address[sock_address.len() - 1]));
+    // Iterator is empty because it wasn't added
     let count = announce_store.find_items(&other_info_hash).count();
     assert_eq!(count, 0);
 
@@ -300,7 +323,7 @@ mod tests {
     let mock_current_time = Instant::now() + storage::EXPIRATION_TIME;
     assert!(announce_store.add(
       other_info_hash,
-      sock_addrs[sock_addrs.len() - 1],
+      sock_address[sock_address.len() - 1],
       mock_current_time
     ));
     // Iterator is not empty because it was added
@@ -309,22 +332,22 @@ mod tests {
   }
 
   #[test]
-  fn positive_full_storage_expire_two_infohash() {
+  fn positive_full_storage_expire_two_info_hash() {
     let mut announce_store = AnnounceStorage::new();
     let info_hash_one = [0u8; INFO_HASH_LEN].into();
     let info_hash_two = [1u8; INFO_HASH_LEN].into();
-    let sock_addrs =
-      test::dummy_block_socket_addrs((storage::MAX_ITEMS_STORED + 1) as u16);
+    let sock_address =
+      test::dummy_block_socket_address((storage::MAX_ITEMS_STORED + 1) as u16);
 
     // Fill up first info hash
     let num_contacts_first = storage::MAX_ITEMS_STORED / 2;
-    for sock_addr in sock_addrs.iter().take(num_contacts_first) {
+    for sock_addr in sock_address.iter().take(num_contacts_first) {
       assert!(announce_store.add_item(info_hash_one, *sock_addr));
     }
 
     // Fill up second info hash
     let num_contacts_second = storage::MAX_ITEMS_STORED - num_contacts_first;
-    for sock_addr in sock_addrs
+    for sock_addr in sock_address
       .iter()
       .skip(num_contacts_first)
       .take(num_contacts_second)
@@ -335,7 +358,7 @@ mod tests {
     // Try to add a third info hash with a contact
     let info_hash_three = [2u8; INFO_HASH_LEN].into();
     assert!(!announce_store
-      .add_item(info_hash_three, sock_addrs[sock_addrs.len() - 1]));
+      .add_item(info_hash_three, sock_address[sock_address.len() - 1]));
     // Iterator is empty because it was not added
     let count = announce_store.find_items(&info_hash_three).count();
     assert_eq!(count, 0);
@@ -344,7 +367,7 @@ mod tests {
     let mock_current_time = Instant::now() + storage::EXPIRATION_TIME;
     assert!(announce_store.add(
       info_hash_three,
-      sock_addrs[sock_addrs.len() - 1],
+      sock_address[sock_address.len() - 1],
       mock_current_time
     ));
     // Iterator is not empty because it was added
