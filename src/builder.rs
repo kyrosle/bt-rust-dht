@@ -5,7 +5,7 @@ use std::{
 use futures_util::Stream;
 use tokio::{
   sync::{mpsc, oneshot},
-  task,
+  task::{self, JoinHandle},
 };
 
 use crate::{
@@ -30,6 +30,9 @@ use crate::{
 /// Any lookup should then be performed on both instances and their results aggregated.
 pub struct MainlineDht {
   send: mpsc::UnboundedSender<OneShotTask>,
+  // used for graceful shutdown.
+  #[allow(dead_code)]
+  dht_handler: JoinHandle<()>,
 }
 
 impl MainlineDht {
@@ -68,9 +71,13 @@ impl MainlineDht {
       unreachable!()
     }
 
-    task::spawn(handler.run());
+    log::info!("Start the dht handler process.");
+    let dht_handler = task::spawn(handler.run());
 
-    MainlineDht { send: command_tx }
+    MainlineDht {
+      send: command_tx,
+      dht_handler,
+    }
   }
 
   /// Get the state of the DHT state machine, can be used for debugging.

@@ -110,12 +110,14 @@ impl DhtHandler {
   async fn run_once(&mut self) {
     select! {
       token = self.timer.next(), if !self.timer.is_empty() => {
+        log::debug!("handle timer.");
         // `unwrap` is OK because we checked the timer is non-empty, so it should
         // never return `None`.
         let token = token.unwrap();
         self.handle_timeout(token).await
       }
       command = self.command_rx.recv() => {
+        log::debug!("handle OneShotTask.");
         if let Some(command) = command {
           self.handle_command(command).await
         } else {
@@ -123,6 +125,7 @@ impl DhtHandler {
         }
       }
       message = self.socket.recv() => {
+        log::debug!("handle socket receive.");
         match message {
           Ok((buffer, addr)) => if let Err(error) = self.handle_incoming(&buffer, addr).await {
             log::debug!(

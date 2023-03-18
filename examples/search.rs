@@ -2,7 +2,7 @@ use std::{
   collections::HashSet,
   net::{Ipv4Addr, SocketAddr},
   str::FromStr,
-  time::{Instant, Duration},
+  time::Instant,
 };
 
 use bt_rust_dht::{router, InfoHash, LengthError, MainlineDht};
@@ -88,11 +88,13 @@ async fn handle_command(dht: &MainlineDht, command: &str) -> io::Result<bool> {
       println!("    q               quit");
       println!();
       println!(
-                "Note: <INFO_HASH> can be specified either as a 40-character hexadecimal string or \
+                "
+                Note: <INFO_HASH> can be specified either as a 40-character hexadecimal string or \
                 an arbitrary string prefixed with '#'. In the first case it is interpreted \
                 directly as the info hash, in the second the info hash is obtained by computing a \
                 SHA-1 digest of the string excluding the leading '#' and trimming any leading or \
-                trailing whitespace."
+                trailing whitespace.
+                "
             );
 
       Ok(true)

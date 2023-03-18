@@ -125,6 +125,7 @@ impl TableBootstrap {
     }
 
     self.router_addresses = resolve(&self.routers, socket.ip_version()).await;
+    log::info!("resolve the router_address: {}", self.router_addresses.len());
 
     if self.router_addresses.is_empty() {
       // This doesn't need to be counted as a failed bootstrap attempt because we have
