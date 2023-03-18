@@ -42,7 +42,7 @@ impl<T> Timer<T> {
     self.current.is_none() && self.queue.is_empty()
   }
 
-  /// Schedule the timers and add a new event with a deadline and a return value.
+  /// Schedule the timers and add a new event with a deadline and a value would be returned if ready.
   pub fn schedule_in(&mut self, deadline: Duration, value: T) -> Timeout {
     self.schedule_at(Instant::now() + deadline, value)
   }
@@ -77,7 +77,7 @@ impl<T> Timer<T> {
     self.queue.remove(&timeout).is_some()
   }
 
-  /// Warpping add 1 to the next_id, and return the id before.
+  /// Wrapping add 1 to the next_id, and return the id before.
   fn next_id(&mut self) -> u64 {
     let id = self.next_id;
     self.next_id = self.next_id.wrapping_add(1);

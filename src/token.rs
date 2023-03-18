@@ -94,7 +94,7 @@ pub struct TokenStore {
   /// The secret from the previous time.
   /// - if we create the token, this would used as the backup token,
   ///   and this token may not timeout.
-  /// 
+  ///
   /// - if we refresh the token, this would also regarded as backup token,
   ///   to verify expired tokens in the future.
   last_secret: u32,

@@ -28,11 +28,11 @@ use crate::{
 /// `MainlineDht` instances, one bound to an IPv4 and the other to an IPv6 address.
 /// It is recommended the both instances use the same node id ([`DhtBuilder::set_node_id`]).
 /// Any lookup should then be performed on both instances and their results aggregated.
-pub struct MainLineDht {
+pub struct MainlineDht {
   send: mpsc::UnboundedSender<OneShotTask>,
 }
 
-impl MainLineDht {
+impl MainlineDht {
   /// Create a new DhtBuilder.
   pub fn builder() -> DhtBuilder {
     DhtBuilder {
@@ -70,7 +70,7 @@ impl MainLineDht {
 
     task::spawn(handler.run());
 
-    MainLineDht { send: command_tx }
+    MainlineDht { send: command_tx }
   }
 
   /// Get the state of the DHT state machine, can be used for debugging.
@@ -228,8 +228,8 @@ impl DhtBuilder {
   pub fn start<S: SocketTrait + Send + Sync + 'static>(
     self,
     socket: S,
-  ) -> io::Result<MainLineDht> {
+  ) -> io::Result<MainlineDht> {
     let socket = Socket::new(socket)?;
-    Ok(MainLineDht::with_builder(self, socket))
+    Ok(MainlineDht::with_builder(self, socket))
   }
 }

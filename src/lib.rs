@@ -7,6 +7,7 @@
 pub mod compact;
 pub mod id;
 pub mod message;
+pub mod router;
 pub mod routing;
 pub mod storage;
 pub mod token;
@@ -16,6 +17,10 @@ pub mod builder;
 pub mod worker;
 
 pub mod test;
+
+pub use crate::builder::{DhtBuilder, MainlineDht};
+pub use crate::id::{InfoHash, LengthError, NodeId, INFO_HASH_LEN};
+pub use crate::worker::State;
 
 pub type IpVersion = crate::worker::IpVersion;
 

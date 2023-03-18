@@ -5,6 +5,8 @@
     "datagrams",
     "Hasher",
     "oneshot",
+    "peekable",
+    "subsec",
     "thiserror",
     "unscalable"
   ]

@@ -48,7 +48,7 @@ pub struct TableLookup {
   ip_version: IpVersion,
   target_id: InfoHash,
   in_endgame: bool,
-  // If w have received any values in the lookup.
+  // If we have received any values in the lookup.
   recv_values: bool,
   id_generator: MIDGenerator,
   will_announce: bool,
@@ -59,7 +59,7 @@ pub struct TableLookup {
   announce_tokens: HashMap<NodeHandle, Vec<u8>>,
   requested_nodes: HashSet<NodeHandle>,
   // Storing whether or not it has ever been pinged so that
-  // we can perform the brute force lookup if the lookup failed
+  // we can perform the brute-force lookup if the lookup failed
   all_sorted_nodes: Vec<(Distance, NodeHandle, bool)>,
   // Send the found peers through this channel.
   tx: mpsc::UnboundedSender<SocketAddr>,

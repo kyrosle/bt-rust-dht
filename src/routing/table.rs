@@ -113,7 +113,6 @@ impl RoutingTable {
   /// Recursively tries to place the node into some buckets.
   fn bucket_node(&mut self, node: Node, num_same_bits: usize) {
     let bucket_index = bucket_placement(num_same_bits, self.buckets.len());
-
     // Try to place in correct bucket and if the Bucket was full, try to split it.
     if !self.buckets[bucket_index].add_node(node.clone())
       && self.split_bucket(bucket_index)
@@ -433,9 +432,9 @@ mod tests {
 
     // Trigger a bucket overflow and since the ids are placed in the last bucket, all of
     // the buckets will be recursively created and inserted into the list of all buckets.
-    let block_addrs =
+    let block_address =
       test::dummy_block_socket_address((bucket::MAX_BUCKET_SIZE + 1) as u16);
-    for block_addr in block_addrs {
+    for block_addr in block_address {
       let node = Node::as_good(node_id.into(), block_addr);
 
       table.add_node(node);
@@ -462,9 +461,9 @@ mod tests {
     // Flip first bit so we are placed in the first bucket
     node_id[0] |= 128;
 
-    let block_addrs =
+    let block_address =
       test::dummy_block_socket_address((bucket::MAX_BUCKET_SIZE + 1) as u16);
-    for block_addr in block_addrs {
+    for block_addr in block_address {
       let node = Node::as_good(node_id.into(), block_addr);
 
       table.add_node(node);
@@ -495,9 +494,9 @@ mod tests {
     // Flip last bit so we are placed in the last bucket
     node_id[NODE_ID_LEN - 1] = 0;
 
-    let block_addrs =
+    let block_address =
       test::dummy_block_socket_address((bucket::MAX_BUCKET_SIZE + 1) as u16);
-    for block_addr in block_addrs {
+    for block_addr in block_address {
       let node = Node::as_good(node_id.into(), block_addr);
 
       table.add_node(node);
@@ -527,10 +526,10 @@ mod tests {
     let table_id = NodeId::from([1u8; NODE_ID_LEN]);
     let mut table = RoutingTable::new(table_id);
 
-    let block_addrs =
+    let block_address =
       test::dummy_block_socket_address(bucket::MAX_BUCKET_SIZE as u16);
     for bit_flip_index in 0..table::MAX_BUCKETS {
-      for block_addr in &block_addrs {
+      for block_addr in &block_address {
         let bucket_node_id = table_id.flip_bit(bit_flip_index);
 
         table.add_node(Node::as_good(bucket_node_id, *block_addr));

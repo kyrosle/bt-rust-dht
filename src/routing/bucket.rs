@@ -1,6 +1,6 @@
 //! Buckets are exists in each node.
 //!
-//! The routing table is subdivided into "buckets" that
+//! The routing table will be subdivided into "buckets" that
 //! each cover a portion of the space.
 //!
 use std::{
@@ -12,10 +12,11 @@ use crate::id::{NodeId, NODE_ID_LEN};
 
 use super::node::{Node, NodeStatus};
 
-/// Maximum number of nodes that should reside in any bucket.
+/// Maximum number of nodes that should reside in any bucket (default).
 pub const MAX_BUCKET_SIZE: usize = 8;
 
 /// Bucket containing Nodes with identical bit prefixes.
+/// each bucket only contains 8 (default) nodes at most, if meeting overflowing situations, the bucket will splitted.
 pub struct Bucket {
   nodes: [Node; MAX_BUCKET_SIZE],
 }
@@ -26,8 +27,10 @@ impl Bucket {
     let id = NodeId::from([0u8; NODE_ID_LEN]);
 
     let ip = Ipv4Addr::new(127, 0, 0, 1);
+    // operating system will automatically assign a random port.
     let addr = SocketAddr::V4(SocketAddrV4::new(ip, 0));
 
+    // set all nodes are bad, should be replaced.
     Bucket {
       nodes: [
         Node::as_bad(id, addr),
@@ -61,7 +64,7 @@ impl Bucket {
     self.nodes.iter()
   }
 
-  /// Indicates if the bucket needs to be refreshed.
+  /// Indicates if the bucket needs to be refreshed, when the nodes insides are Bad or Questionable.
   #[allow(unused)]
   pub fn needs_refresh(&self) -> bool {
     self
@@ -94,6 +97,9 @@ impl Bucket {
     // See if any lower priority nodes are present in the table, we cant do
     // nodes that have equal status because we have to prefer longer lasting
     // nodes in the case of a good status which helps with stability.
+    // that is,
+    // Good node can replace the Questionable or Bad node.
+    // Questionable can replace the Bad node.
     let replace_index = self
       .nodes
       .iter()
@@ -108,6 +114,7 @@ impl Bucket {
   }
 
   #[cfg(test)]
+  /// Return the iterator of Good node for testing.
   fn good_nodes(&self) -> impl Iterator<Item = &Node> {
     self
       .nodes
