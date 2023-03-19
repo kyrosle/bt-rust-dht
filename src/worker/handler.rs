@@ -30,6 +30,8 @@ use super::{
 };
 
 pub struct DhtHandler {
+  name: String,
+
   running: bool,
   command_rx: mpsc::UnboundedReceiver<OneShotTask>,
   timer: Timer<ScheduledTaskCheck>,
@@ -53,6 +55,7 @@ pub struct DhtHandler {
 
 impl DhtHandler {
   pub fn new(
+    name: String,
     table: RoutingTable,
     socket: Socket,
     read_only: bool,
@@ -65,10 +68,11 @@ impl DhtHandler {
 
     // The refresh task to execute after the bootstrap
     let mid_generator = aid_generator.generate();
-    let table_refresh = TableRefresh::new(mid_generator);
+    let table_refresh = TableRefresh::new(name.clone(), mid_generator);
 
     let mid_generator = aid_generator.generate();
     let bootstrap = TableBootstrap::new(
+      name.clone(),
       socket.ip_version(),
       table.node_id(),
       mid_generator,
@@ -79,6 +83,7 @@ impl DhtHandler {
     let timer = Timer::new();
 
     DhtHandler {
+      name,
       running: true,
       command_rx,
       timer,
@@ -110,32 +115,34 @@ impl DhtHandler {
   async fn run_once(&mut self) {
     select! {
       token = self.timer.next(), if !self.timer.is_empty() => {
-        log::debug!("handle timer.");
         // `unwrap` is OK because we checked the timer is non-empty, so it should
         // never return `None`.
         let token = token.unwrap();
+        log::debug!("[{}] handle ScheduledTaskCheck::{}.", self.name, &token);
         self.handle_timeout(token).await
       }
       command = self.command_rx.recv() => {
-        log::debug!("handle OneShotTask.");
         if let Some(command) = command {
+          log::debug!("[{}] handle OneShotTask::{}.", self.name, &command);
           self.handle_command(command).await
         } else {
           self.shutdown()
         }
       }
       message = self.socket.recv() => {
-        log::debug!("handle socket receive.");
+        log::debug!("[{}] handle socket receive.", self.name);
         match message {
           Ok((buffer, addr)) => if let Err(error) = self.handle_incoming(&buffer, addr).await {
             log::debug!(
-              "{}: Failed to handle incoming message: {}",
+              "[{}] {}: Failed to handle incoming message: {}",
+              self.name,
               self.ip_version(),
               error
             );
           }
           Err(error) => log::warn!(
-            "{}: Failed to receive incoming message: {}",
+            "[{}] {}: Failed to receive incoming message: {}",
+            self.name,
             self.ip_version(),
             error
           ),
@@ -157,6 +164,7 @@ impl DhtHandler {
       }
       OneShotTask::GetLocalAddr(tx) => self.handle_get_local_addr(tx),
       OneShotTask::GetState(tx) => self.handle_get_state(tx),
+      OneShotTask::GetNodes(tx) => self.handler_check_nodes(tx),
     }
   }
 
@@ -196,7 +204,12 @@ impl DhtHandler {
       return Ok(());
     }
 
-    log::trace!("{}: Received {:?}", self.ip_version(), message);
+    log::trace!(
+      "[{}] {}: Received {:?}",
+      self.name,
+      self.ip_version(),
+      message
+    );
 
     // Process the given message
     match message.body {
@@ -316,7 +329,8 @@ impl DhtHandler {
         let response_msg = if !is_valid {
           // Node gave us an invalid token
           log::debug!(
-            "{}: Remove node sent us an invalid token for an AnnounceRequest",
+            "[{}] {}: Remove node sent us an invalid token for an AnnounceRequest",
+            self.name,
             self.ip_version()
           );
           Message {
@@ -342,7 +356,8 @@ impl DhtHandler {
           .encode()
         } else {
           log::warn!(
-            "{}: AnnounceStorage failed to store contact information because it is full",
+            "[{}] {}: AnnounceStorage failed to store contact information because it is full",
+            self.name,
             self.ip_version()
           );
 
@@ -530,6 +545,7 @@ impl DhtHandler {
     let action_id = mid_generator.action_id();
 
     let mut lookup = TableLookup::new(
+      self.name.clone(),
       lookup.info_hash,
       lookup.announce,
       lookup.tx,
@@ -564,6 +580,10 @@ impl DhtHandler {
     .unwrap_or(())
   }
 
+  fn handler_check_nodes(&self, tx: oneshot::Sender<Vec<SocketAddr>>) {
+    tx.send(self.routing_table.get_nodes()).unwrap_or(())
+  }
+
   fn handle_get_local_addr(&self, tx: oneshot::Sender<SocketAddr>) {
     tx.send(self.socket.local_addr()).unwrap_or(())
   }
@@ -575,7 +595,8 @@ impl DhtHandler {
       lookup
     } else {
       log::error!(
-        "{}: Resolved a TransactionID to a check table lookup but no action found",
+        "[{}] {}: Resolved a TransactionID to a check table lookup but no action found",
+        self.name,
         self.ip_version()
       );
       return;
@@ -605,7 +626,7 @@ impl DhtHandler {
       if let Some(lookup) = self.lookups.remove(&trans_id.action_id()) {
         lookup
       } else {
-        log::error!("{}: Lookup not found", self.ip_version());
+        log::error!("[{}] {}: Lookup not found", self.name, self.ip_version());
         return;
       };
 

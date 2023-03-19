@@ -52,6 +52,21 @@ pub enum OneShotTask {
   GetLocalAddr(oneshot::Sender<SocketAddr>),
   /// Retrieve debug information
   GetState(oneshot::Sender<State>),
+  /// Check all the node contains.
+  GetNodes(oneshot::Sender<Vec<SocketAddr>>),
+}
+
+impl std::fmt::Display for OneShotTask {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      OneShotTask::StartBootstrap() => write!(f, "StartBootstrap"),
+      OneShotTask::CheckBootstrap(_, _) => write!(f, "CheckBootstrap"),
+      OneShotTask::StartLookup(_) => write!(f, "StartLookup"),
+      OneShotTask::GetLocalAddr(_) => write!(f, "GetLocalAddr"),
+      OneShotTask::GetState(_) => write!(f, "GetState"),
+      OneShotTask::GetNodes(_) => write!(f, "GetNodes"),
+    }
+  }
 }
 
 pub struct StartLookup {
@@ -80,6 +95,18 @@ pub enum ScheduledTaskCheck {
   LookupTimeout(TransactionID),
   /// Check the progress of the lookup endgame.
   LookupEndGame(TransactionID),
+}
+
+impl std::fmt::Display for ScheduledTaskCheck {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+      match self {
+        ScheduledTaskCheck::TableRefresh => write!(f, "TableRefresh"),
+        ScheduledTaskCheck::BootstrapTimeout(_) => write!(f, "BootstrapTimeout"),
+        ScheduledTaskCheck::UserBootstrappedTimeout(_) => write!(f, "UserBootstrappedTimeout"),
+        ScheduledTaskCheck::LookupTimeout(_) => write!(f, "LookupTimeout"),
+        ScheduledTaskCheck::LookupEndGame(_) => write!(f, "LookupEndgame"),
+    }
+  }
 }
 
 #[derive(Error, Debug)]

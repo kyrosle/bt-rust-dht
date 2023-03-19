@@ -1,4 +1,4 @@
-use std::{iter::Filter, slice::Iter};
+use std::{io::Read, iter::Filter, net::SocketAddr, slice::Iter};
 
 use crate::id::{NodeId, ID_LEN};
 
@@ -16,6 +16,15 @@ pub struct RoutingTable {
   // the last bucket in the buckets array.
   buckets: Vec<Bucket>,
   node_id: NodeId,
+}
+
+impl std::fmt::Debug for RoutingTable {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("RoutingTable")
+      .field("node_id", &self.node_id)
+      .field("buckets", &self.buckets)
+      .finish()
+  }
 }
 
 impl RoutingTable {
@@ -37,6 +46,16 @@ impl RoutingTable {
   /// lookups and aggregating a number of results equal to the size of a bucket.
   pub fn closest_nodes(&self, node_id: NodeId) -> ClosestNodes {
     ClosestNodes::new(&self.buckets, self.node_id, node_id)
+  }
+
+  pub fn get_nodes(&self) -> Vec<SocketAddr> {
+    let mut nodes = Vec::with_capacity(self.buckets.len() * 8);
+    for bucket in &self.buckets {
+      for node in bucket.iter() {
+        nodes.push(node);
+      }
+    }
+    nodes.into_iter().map(|n| n.handle().addr).collect()
   }
 
   /// Number of good nodes in the RoutingTable.

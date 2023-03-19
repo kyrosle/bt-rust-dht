@@ -33,6 +33,7 @@ const PINGS_PER_BUCKET: usize = 8;
 
 /// Bootstrap for startup the table-routing
 pub struct TableBootstrap {
+  name: String,
   // the ip address version v4 / v6.
   ip_version: IpVersion,
   table_id: NodeId,
@@ -60,6 +61,7 @@ enum State {
 
 impl TableBootstrap {
   pub fn new(
+    name: String,
     ip_version: IpVersion,
     table_id: NodeId,
     id_generator: MIDGenerator,
@@ -67,6 +69,7 @@ impl TableBootstrap {
     nodes: HashSet<SocketAddr>,
   ) -> Self {
     TableBootstrap {
+      name,
       ip_version,
       table_id,
       routers,
@@ -99,7 +102,8 @@ impl TableBootstrap {
       false
     } else {
       log::info!(
-        "{}: TableBootstrap state change {:?} -> {:?} (from: {})",
+        "[{}] {}: TableBootstrap state change {:?} -> {:?} (from: {})",
+        self.name,
         self.ip_version,
         self.state,
         new_state,
@@ -119,13 +123,20 @@ impl TableBootstrap {
   ) -> bool {
     self.bootstrap_attempt += 1;
 
+    // If we have no bootstrap contacts it means we are the first node in the network and
+    // other would bootstrap against us. We consider this node as already bootstrapped.
     if self.routers.is_empty() {
+      log::info!("[{}] Router is empty", self.name);
       self.bootstrap_attempt = 0;
       return self.set_state(State::Bootstrapped, line!());
     }
 
     self.router_addresses = resolve(&self.routers, socket.ip_version()).await;
-    log::info!("resolve the router_address: {}", self.router_addresses.len());
+    log::info!(
+      "[{}] resolve the router_address counts: {}",
+      self.name,
+      self.router_addresses.len()
+    );
 
     if self.router_addresses.is_empty() {
       // This doesn't need to be counted as a failed bootstrap attempt because we have
@@ -181,7 +192,8 @@ impl TableBootstrap {
         }
         Err(e) => {
           log::error! {
-            "{}: Failed to send bootstrap message to router: {}",
+            "[{}] {}: Failed to send bootstrap message to router: {}",
+            self.name,
             self.ip_version,
             e
           };
@@ -230,7 +242,8 @@ impl TableBootstrap {
       *t
     } else {
       log::debug!(
-        "{}: Received expired/unsolicited node response for an active table bootstrap",
+        "[{}] {}: Received expired/unsolicited node response for an active table bootstrap",
+        self.name,
         self.ip_version
       );
       // Return that the state has not changed.
@@ -288,7 +301,8 @@ impl TableBootstrap {
   ) -> bool {
     if self.active_message.remove(trans_id).is_none() {
       log::warn!(
-        "{}: Received expired/unsolicited node timeout in table bootstrap",
+        "[{}] {}: Received expired/unsolicited node timeout in table bootstrap",
+        self.name,
         self.ip_version
       );
       return false;
@@ -335,7 +349,8 @@ impl TableBootstrap {
     timer: &mut Timer<ScheduledTaskCheck>,
   ) -> bool {
     log::debug!(
-      "{}: TableBootstrap::bootstrap_next_bucket {} {}",
+      "[{}] {}: TableBootstrap::bootstrap_next_bucket {} {}",
+      self.name,
       self.ip_version,
       self.current_bootstrap_bucket,
       table::MAX_BUCKETS
@@ -449,7 +464,8 @@ impl TableBootstrap {
       // Send the message to the node
       if let Err(error) = socket.send(&find_node_msg, node.addr).await {
         log::error!(
-          "{}: Could not send a bootstrap message: {}",
+          "[{}] {}: Could not send a bootstrap message: {}",
+          self.name,
           self.ip_version,
           error
         );

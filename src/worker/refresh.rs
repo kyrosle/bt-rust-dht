@@ -15,13 +15,15 @@ const REFRESH_INTERVAL_TIMEOUT: Duration = Duration::from_millis(6000);
 const REFRESH_CONCURRENCY: usize = 4;
 
 pub struct TableRefresh {
+  name: String,
   id_generator: MIDGenerator,
   current_refresh_bucket: usize,
 }
 
 impl TableRefresh {
-  pub fn new(id_generator: MIDGenerator) -> Self {
+  pub fn new(name: String, id_generator: MIDGenerator) -> Self {
     TableRefresh {
+      name,
       id_generator,
       current_refresh_bucket: 0,
     }
@@ -56,7 +58,8 @@ impl TableRefresh {
     let target_id = table.node_id().flip_bit(self.current_refresh_bucket);
 
     log::debug!(
-      "Performing a refresh for bucket {}",
+      "[{}] Performing a refresh for bucket {}",
+      self.name,
       self.current_refresh_bucket
     );
 
@@ -87,7 +90,7 @@ impl TableRefresh {
 
       // Send the message.
       if let Err(error) = socket.send(&find_node_msg, node.addr).await {
-        log::error!("TableRefresh failed to send a refresh message: {}", error);
+        log::error!("[{}] TableRefresh failed to send a refresh message: {}",self.name, error);
       }
 
       // Mark that we requested from the node.

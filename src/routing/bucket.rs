@@ -17,9 +17,11 @@ pub const MAX_BUCKET_SIZE: usize = 8;
 
 /// Bucket containing Nodes with identical bit prefixes.
 /// each bucket only contains 8 (default) nodes at most, if meeting overflowing situations, the bucket will splitted.
+#[derive(Debug)]
 pub struct Bucket {
   nodes: [Node; MAX_BUCKET_SIZE],
 }
+
 
 impl Bucket {
   /// Create a new Bucket with all Nodes default initialized.

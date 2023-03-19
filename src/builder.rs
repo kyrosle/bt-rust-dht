@@ -29,6 +29,7 @@ use crate::{
 /// It is recommended the both instances use the same node id ([`DhtBuilder::set_node_id`]).
 /// Any lookup should then be performed on both instances and their results aggregated.
 pub struct MainlineDht {
+  name: String,
   send: mpsc::UnboundedSender<OneShotTask>,
   // used for graceful shutdown.
   #[allow(dead_code)]
@@ -48,14 +49,18 @@ impl MainlineDht {
   }
 
   /// Start the MainlineDht with the given DhtBuilder.
-  fn with_builder(builder: DhtBuilder, socket: Socket) -> Self {
+  fn with_builder(name: String, builder: DhtBuilder, socket: Socket) -> Self {
     let (command_tx, command_rx) = mpsc::unbounded_channel();
 
     // TODO: Utilize the security extension.
     let routing_table =
       RoutingTable::new(builder.node_id.unwrap_or_else(rand::random));
 
+    let log_name = name.clone();
+    let mainline_name = name.clone();
+
     let handler = DhtHandler::new(
+      name,
       routing_table,
       socket,
       builder.read_only,
@@ -71,12 +76,24 @@ impl MainlineDht {
       unreachable!()
     }
 
-    log::info!("Start the dht handler process.");
+    log::info!("[{}] Start the dht handler process.", log_name);
     let dht_handler = task::spawn(handler.run());
 
     MainlineDht {
+      name: mainline_name,
       send: command_tx,
       dht_handler,
+    }
+  }
+
+  /// Get teh all nodes from the router table. (currently only for testing.)
+  pub async fn get_nodes(&self) -> Option<Vec<SocketAddr>> {
+    let (tx, rx) = oneshot::channel();
+
+    if self.send.send(OneShotTask::GetNodes(tx)).is_err() {
+      None
+    } else {
+      rx.await.ok()
     }
   }
 
@@ -127,7 +144,10 @@ impl MainlineDht {
       }))
       .is_err()
     {
-      log::error!("failed to start search - DhtHandler has shut down");
+      log::error!(
+        "[{}]failed to start search - DhtHandler has shut down",
+        self.name
+      );
     }
 
     SearchStream(rx)
@@ -234,9 +254,10 @@ impl DhtBuilder {
   /// Fails only if `socket.local_addr()` fails
   pub fn start<S: SocketTrait + Send + Sync + 'static>(
     self,
+    name: &str,
     socket: S,
   ) -> io::Result<MainlineDht> {
     let socket = Socket::new(socket)?;
-    Ok(MainlineDht::with_builder(self, socket))
+    Ok(MainlineDht::with_builder(name.to_string(), self, socket))
   }
 }

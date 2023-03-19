@@ -45,6 +45,7 @@ type Distance = Id;
 type DistanceToBeat = Id;
 
 pub struct TableLookup {
+  name: String,
   ip_version: IpVersion,
   target_id: InfoHash,
   in_endgame: bool,
@@ -69,6 +70,7 @@ pub struct TableLookup {
 
 impl TableLookup {
   pub async fn new(
+    name: String,
     target_id: InfoHash,
     will_announce: bool,
     tx: mpsc::UnboundedSender<SocketAddr>,
@@ -104,6 +106,7 @@ impl TableLookup {
 
     // Construct the lookup table structure.
     let mut table_lookup = TableLookup {
+      name,
       ip_version: socket.ip_version(),
       target_id,
       in_endgame: false,
@@ -145,7 +148,8 @@ impl TableLookup {
       lookup
     } else {
       log::debug!(
-        "{}: Received expired/unsolicited node response for an active table lookup",
+        "[{}] {}: Received expired/unsolicited node response for an active table lookup",
+        self.name,
         self.ip_version
       );
       return self.current_lookup_status();
@@ -248,7 +252,8 @@ impl TableLookup {
   ) -> ActionStatus {
     if self.active_lookups.remove(trans_id).is_none() {
       log::warn!(
-        "{}: Received expired/unsolicited node timeout for an active table lookup",
+        "[{}] {}: Received expired/unsolicited node timeout for an active table lookup",
+        self.name,
         self.ip_version
       );
       return self.current_lookup_status();
@@ -304,7 +309,8 @@ impl TableLookup {
           }
           Err(error) => {
             log::error!(
-              "{}: TableLookup announce request failed to send: {}",
+              "[{}] {}: TableLookup announce request failed to send: {}",
+              self.name,
               self.ip_version,
               error
             )
@@ -367,7 +373,8 @@ impl TableLookup {
 
       if let Err(error) = socket.send(&get_peers_msg, node.addr).await {
         log::error!(
-          "{}: Could not send a lookup message: {}",
+          "[{}] {}: Could not send a lookup message: {}",
+          self.name,
           self.ip_version,
           error
         )
@@ -431,7 +438,8 @@ impl TableLookup {
 
         if let Err(error) = socket.send(&get_peers_msg, node.addr).await {
           log::error!(
-            "{}: Could not send an endgame message: {}",
+            "[{}] {}: Could not send an endgame message: {}",
+            self.name,
             self.ip_version,
             error
           );

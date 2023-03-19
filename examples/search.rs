@@ -35,7 +35,7 @@ async fn main() {
         .map(|addr| addr.to_string()),
     )
     .set_read_only(false)
-    .start(socket)
+    .start("mainline", socket)
     .unwrap();
 
   println!("bootstrapping...");
