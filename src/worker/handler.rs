@@ -130,7 +130,7 @@ impl DhtHandler {
         }
       }
       message = self.socket.recv() => {
-        log::debug!("[{}] handle socket receive.", self.name);
+        // log::debug!("[{}] handle socket receive.", self.name);
         match message {
           Ok((buffer, addr)) => if let Err(error) = self.handle_incoming(&buffer, addr).await {
             log::debug!(
@@ -240,11 +240,17 @@ impl DhtHandler {
         let node = NodeHandle::new(f.id, addr);
 
         // Node requested from us, mark it in the RoutingTable
+        log::trace!("[{}] find node request", self.name);
         if let Some(n) = self.routing_table.find_node_mut(&node) {
           n.remote_request()
+        } else {
+          // if routing table doesn't contain this node,
+          // we add it as a good node.
+          self.routing_table.add_node(Node::as_good(f.id, addr));
         }
 
         let (nodes_v4, nodes_v6) = self.find_closest_nodes(f.target, f.want)?;
+        log::debug!("[{}] found v4 nodes: {:#?}", self.name, nodes_v4);
 
         let find_node_rsp = Response {
           id: self.routing_table.node_id(),
@@ -398,6 +404,7 @@ impl DhtHandler {
     };
 
     if self.bootstrap.action_id() == trans_id.action_id() {
+      // log::debug!("[{}] handle bootstrap action response", self.name);
       add_nodes(
         &mut self.routing_table,
         &node,
@@ -471,8 +478,10 @@ impl DhtHandler {
     timeout: Option<Duration>,
   ) {
     if self.bootstrap.is_bootstrapped() {
+      log::trace!("[{}] is bootstrapped.", self.name);
       tx.send(true).unwrap_or(())
     } else {
+      log::trace!("[{}] is not bootstrapped.", self.name);
       let id = self.next_bootstrap_txs_id;
       self.next_bootstrap_txs_id += 1;
       self.bootstrap_txs.insert(id, tx);
@@ -482,6 +491,11 @@ impl DhtHandler {
           timeout,
           ScheduledTaskCheck::UserBootstrappedTimeout(id),
         );
+      } else {
+        // Here the remove action must not be None.
+        let tx = self.bootstrap_txs.remove(&id).unwrap();
+        // Here maybe be panic in unwrap(), if the channel was closed.
+        tx.send(true).unwrap();
       }
     }
   }
@@ -665,6 +679,12 @@ impl DhtHandler {
       },
     };
 
+    log::trace!(
+      "[{}] find node request table: {:?}",
+      self.name,
+      self.routing_table
+    );
+
     let node_v4 = if matches!(want, Want::V4 | Want::Both) {
       self
         .routing_table
@@ -699,6 +719,8 @@ fn add_nodes(
   nodes: &[NodeHandle],
   routers: &HashSet<SocketAddr>,
 ) {
+  // check the requesting node whether is exist in our routing table.
+  // here this node is a good node which we are requested from.
   if !routers.contains(&node.addr()) {
     table.add_node(node.clone());
   }
@@ -709,4 +731,5 @@ fn add_nodes(
       table.add_node(Node::as_questionable(node.id, node.addr));
     }
   }
+  // log::debug!("After Add Nodes - {:#?}", table);
 }

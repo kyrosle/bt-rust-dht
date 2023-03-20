@@ -33,20 +33,33 @@ const PINGS_PER_BUCKET: usize = 8;
 
 /// Bootstrap for startup the table-routing
 pub struct TableBootstrap {
+  /// A string representing the name of the node that is performing the bootstrap.
   name: String,
-  // the ip address version v4 / v6.
+  /// An enum representing the IP version of the node, which could be IPv4 or IPv6.
   ip_version: IpVersion,
+  /// Representing the unique ID of the node's routing table.
   table_id: NodeId,
+  /// Representing the IP addresses of the known routers in the network
   routers: HashSet<String>,
+  /// Representing the network addresses of the known routers in the network
   router_addresses: HashSet<SocketAddr>,
+  /// An ID generator that generates transaction IDs used for sending messages in the network.
   id_generator: MIDGenerator,
+  /// Representing the initial nodes to contact for bootstrap.
   starting_nodes: HashSet<SocketAddr>,
+  /// Used for tracking active messages in the network.
   active_message: HashMap<TransactionID, Timeout>,
+  /// An integer representing the current bucket being used for bootstrap.
   current_bootstrap_bucket: usize,
+  /// Representing the initial responses received during bootstrap
   initial_responses: HashSet<SocketAddr>,
+  /// An integer representing the expected number of initial responses to receive during bootstrap.
   initial_responses_expected: usize,
+  /// An enum representing the state of the bootstrap process.
   state: State,
+  /// An integer representing the number of times bootstrap has been attempted.
   bootstrap_attempt: u64,
+  /// Representing the last send error encountered during bootstrap.
   last_send_error: Option<std::io::ErrorKind>,
 }
 
@@ -79,7 +92,7 @@ impl TableBootstrap {
       active_message: HashMap::new(),
       current_bootstrap_bucket: 0,
       initial_responses: HashSet::new(),
-      initial_responses_expected: 0,
+      initial_responses_expected: 8,
       state: State::IdleBeforeReBootstrap,
       bootstrap_attempt: 0,
       last_send_error: None,
@@ -96,6 +109,7 @@ impl TableBootstrap {
 
   /// Return true if we switched between Bootstrapped and not being Bootstrapped.
   fn set_state(&mut self, new_state: State, from: u32) -> bool {
+    log::debug!("[{}] Bootstrap State want to change: {:?} -> {:?}", self.name, self.state, new_state);
     if (self.state == State::Bootstrapped) == (new_state == State::Bootstrapped)
     {
       self.state = new_state;
@@ -125,20 +139,24 @@ impl TableBootstrap {
 
     // If we have no bootstrap contacts it means we are the first node in the network and
     // other would bootstrap against us. We consider this node as already bootstrapped.
-    if self.routers.is_empty() {
-      log::info!("[{}] Router is empty", self.name);
+    if self.routers.is_empty() && self.starting_nodes.is_empty() {
+      log::debug!(
+        "[{}] Router is empty, I may be the first node in this network.",
+        self.name
+      );
       self.bootstrap_attempt = 0;
       return self.set_state(State::Bootstrapped, line!());
     }
 
+    // resolve the router, convert String into SocketAddress, with tokio::net::lookup_host.
     self.router_addresses = resolve(&self.routers, socket.ip_version()).await;
-    log::info!(
-      "[{}] resolve the router_address counts: {}",
-      self.name,
-      self.router_addresses.len()
-    );
+    if !self.routers.is_empty() && self.router_addresses.is_empty() {
+      // log::debug!(
+      //   "[{}] resolve the router_address counts: {}",
+      //   self.name,
+      //   self.router_addresses.len()
+      // );
 
-    if self.router_addresses.is_empty() {
       // This doesn't need to be counted as a failed bootstrap attempt because we have
       // not yet pinged any of the routers (bootstrap nodes) and thus don't need to
       // do the exponential back off as to not stress them.
@@ -184,6 +202,11 @@ impl TableBootstrap {
       .iter()
       .chain(self.starting_nodes.iter())
     {
+      log::trace!(
+        "[{}] sending initial request to {}",
+        &self.name,
+        addr.to_string()
+      );
       match socket.send(&find_node_msg, *addr).await {
         Ok(()) => {
           if self.initial_responses_expected < PINGS_PER_BUCKET {
@@ -249,6 +272,12 @@ impl TableBootstrap {
       // Return that the state has not changed.
       return false;
     };
+
+    log::trace!(
+      "[{}] received response, active message: {}",
+      self.name,
+      self.active_message.len()
+    );
 
     // In the initial round all the messages have the same transaction id so clear it
     // only after we receive sufficient number of unique response. After the initial round,
@@ -356,6 +385,7 @@ impl TableBootstrap {
       table::MAX_BUCKETS
     );
 
+    // log::debug!("[{}] routing table: {:?}", self.name, table);
     loop {
       if self.current_bootstrap_bucket >= table::MAX_BUCKETS {
         if table.num_good_nodes() >= GOOD_NODE_THRESHOLD {
@@ -363,7 +393,13 @@ impl TableBootstrap {
           idle_timeout_in(timer, PERIODIC_CHECK_TIMEOUT);
           return self.set_state(State::Bootstrapped, line!());
         } else {
-          idle_timeout_in(timer, self.calculate_retry_duration());
+          let time = self.calculate_retry_duration();
+          log::trace!(
+            "[{}] good is less than threshold. Idle timeout {}",
+            self.name,
+            time.as_secs()
+          );
+          idle_timeout_in(timer, time);
           return self.set_state(State::IdleBeforeReBootstrap, line!());
         }
       }
@@ -419,7 +455,11 @@ impl TableBootstrap {
           .collect()
       };
 
+      // log::debug!("[{}] routing table: {:?}", self.name, table);
+      // log::debug!("[{}] closest nodes count: {}", self.name, nodes.len());
+
       self.current_bootstrap_bucket += 1;
+      // log::debug!("[{}] current_bootstrap --> {}",self.name, self.current_bootstrap_bucket);
 
       // If we failed to send any message, try again on the next bucket.
       if self
@@ -443,6 +483,7 @@ impl TableBootstrap {
     timer: &mut Timer<ScheduledTaskCheck>,
   ) -> bool {
     let mut messages_sent = 0;
+    // log::debug!("[{}] send bootstrap requests, nodes count: {}", self.name, nodes.len());
 
     for node in nodes {
       // Generate a transaction id

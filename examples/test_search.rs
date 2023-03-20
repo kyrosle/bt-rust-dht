@@ -23,6 +23,7 @@ async fn announce_and_lookup(addr_family: AddrFamily) {
     bootstrap_node_socket.local_addr().unwrap()
   );
 
+  // bootstrap contracts.
   let bootstrap_node_addr = bootstrap_node_socket.local_addr().unwrap();
   let bootstrap_node = MainlineDht::builder()
     .set_read_only(false)
@@ -30,12 +31,6 @@ async fn announce_and_lookup(addr_family: AddrFamily) {
     .unwrap();
 
   assert!(bootstrap_node.bootstrapped(None).await);
-
-  // loop {
-  //   let router_state = bootstrap_node.get_state().await.unwrap();
-  //   println!("router state: {:#?}", router_state);
-  //   tokio::time::sleep(Duration::from_secs(3)).await;
-  // }
 
   // Start node A
   let a_socket = UdpSocket::bind(localhost(addr_family)).await.unwrap();
@@ -60,6 +55,7 @@ async fn announce_and_lookup(addr_family: AddrFamily) {
 
   // Wait for both nodes to bootstrap
   assert!(a_node.bootstrapped(None).await);
+  // panic!();
   assert!(b_node.bootstrapped(None).await);
 
   // let router_state = bootstrap_node.get_state().await.unwrap();
@@ -92,7 +88,6 @@ async fn announce_and_lookup(addr_family: AddrFamily) {
   assert_eq!(search.next().await, Some(a_addr));
 
   // tokio::time::sleep(Duration::from_secs(6)).await;
-  loop {}
 }
 
 #[derive(Copy, Clone)]

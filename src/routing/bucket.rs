@@ -17,11 +17,21 @@ pub const MAX_BUCKET_SIZE: usize = 8;
 
 /// Bucket containing Nodes with identical bit prefixes.
 /// each bucket only contains 8 (default) nodes at most, if meeting overflowing situations, the bucket will splitted.
-#[derive(Debug)]
 pub struct Bucket {
   nodes: [Node; MAX_BUCKET_SIZE],
 }
 
+impl std::fmt::Debug for Bucket {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    self.nodes.iter().fold(f, |f, node| {
+      if node.addr().port() != 0 {
+        write!(f, "{} ", node.addr()).unwrap();
+      }
+      f
+    });
+    Ok(())
+  }
+}
 
 impl Bucket {
   /// Create a new Bucket with all Nodes default initialized.

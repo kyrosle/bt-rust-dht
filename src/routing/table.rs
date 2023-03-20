@@ -21,7 +21,6 @@ pub struct RoutingTable {
 impl std::fmt::Debug for RoutingTable {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     f.debug_struct("RoutingTable")
-      .field("node_id", &self.node_id)
       .field("buckets", &self.buckets)
       .finish()
   }
@@ -180,6 +179,8 @@ fn can_split_bucket(num_buckets: usize, bucket_index: usize) -> bool {
 }
 
 /// Number of leading bits that are identical between the local and the remote node ids.
+///
+/// Here we can also consider this as the closest distance between self node id and the remote node id.
 pub fn leading_bit_count(local_node: NodeId, remote_node: NodeId) -> usize {
   (local_node ^ remote_node).leading_zeros() as usize
 }
@@ -229,13 +230,22 @@ pub struct ClosestNodes<'a> {
   assorted_nodes: Option<[(usize, &'a Node, bool); bucket::MAX_BUCKET_SIZE]>,
 }
 
+impl std::fmt::Debug for ClosestNodes<'_> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("Closest Nodes")
+      .field("buckets", &self.buckets)
+      .finish()
+  }
+}
+
 impl<'a> ClosestNodes<'a> {
   fn new(
     buckets: &'a [Bucket],
     self_node_id: NodeId,
     other_node_id: NodeId,
   ) -> ClosestNodes<'a> {
-    // the ideal bucket index.
+    // the ideal bucket index(distance).
+    // distance = the common prefix count of (self_node_id ^ target_node_id)
     let start_index = leading_bit_count(self_node_id, other_node_id);
 
     // filter the good nodes in ideal bucket.
@@ -337,7 +347,8 @@ fn precomputed_assorted_nodes(
 
 /// Optionally returns the filter iterator for the bucket a the specified index.
 ///
-/// Filter the good nodes(not including the last bucket because that may contain assorted nodes(different ideal bucket index)).
+/// Filter the good nodes(not including the last bucket(unsorted bucket table) because
+/// that may contain assorted nodes(different ideal bucket index)).
 fn bucket_iterator(buckets: &[Bucket], index: usize) -> Option<GoodNodes> {
   if buckets.len() == MAX_BUCKETS {
     buckets

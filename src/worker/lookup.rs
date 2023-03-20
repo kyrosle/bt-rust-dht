@@ -93,6 +93,12 @@ impl TableLookup {
       );
     }
 
+    log::debug!(
+      "[{}] searching the nodes, founded {} nodes.",
+      &name,
+      all_sorted_nodes.len()
+    );
+
     // Call pick_initial_nodes function with the all_sorted_nodes list as an iterator
     let initial_pick_nodes = pick_initial_nodes(all_sorted_nodes.iter_mut());
     let initial_pick_nodes_filtered = initial_pick_nodes
