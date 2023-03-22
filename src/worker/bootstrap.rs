@@ -109,7 +109,12 @@ impl TableBootstrap {
 
   /// Return true if we switched between Bootstrapped and not being Bootstrapped.
   fn set_state(&mut self, new_state: State, from: u32) -> bool {
-    log::debug!("[{}] Bootstrap State want to change: {:?} -> {:?}", self.name, self.state, new_state);
+    log::debug!(
+      "[{}] Bootstrap State want to change: {:?} -> {:?}",
+      self.name,
+      self.state,
+      new_state
+    );
     if (self.state == State::Bootstrapped) == (new_state == State::Bootstrapped)
     {
       self.state = new_state;

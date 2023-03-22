@@ -75,7 +75,7 @@ async fn announce_and_lookup() {
   let mut search = a_node.search(info_hash_2, false);
   log::info!("Assert a node search the 'foo' from b node.");
   assert_eq!(search.next().await, Some(b_addr));
-
+  
   // create a new node c and start it.
   let (c_node, c_addr) =
     create_v4_node("c_node", Some(vec![bootstrap_node_addr])).await;
