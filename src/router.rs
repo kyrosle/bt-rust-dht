@@ -7,3 +7,6 @@ pub const AELITIS_DHT: &str = "dht.aelitis.com:6990";
 // FIXME: this doesn't seem to work (fails the DNS request)
 pub const BITCOMET_DHT: &str = "router.bitcomet.com:6990";
 pub const TRANSMISSION_DHT: &str = "dht.transmissionbt.com:6990";
+
+// 0magnet.com
+pub const RETRACKER: &str = "retracker.megaseed.kz:6969";

@@ -1,4 +1,4 @@
-use std::{io::Read, iter::Filter, net::SocketAddr, slice::Iter};
+use std::{iter::Filter, net::SocketAddr, slice::Iter};
 
 use crate::id::{NodeId, ID_LEN};
 

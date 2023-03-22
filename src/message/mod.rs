@@ -1,4 +1,5 @@
-//! Reference link: http://bittorrent.org/beps/bep_0005.html
+//! Reference link:
+//!   http://bittorrent.org/beps/bep_0005.html
 //!
 //! ## Contact Encoding
 //! Contact information for `peers` is encoded as a `6-byte string`.
@@ -8,6 +9,26 @@
 //! Contact information for `nodes` is encoded as a `26-byte string`.
 //! Also known as "Compact node info" the 20-byte Node ID in network byte order
 //! has the compact IP-address/port info concatenated to the end.
+//!
+//! Summary from the bittorrent DHT protocol specification:
+//!
+//! Message types:
+//!  - query
+//!  - response
+//!  - error
+//!
+//! RPCs:
+//!      ping:
+//!         see if node is reachable and save it on routing table.
+//!      find_node:
+//!         run when DHT node count drops, or every X minutes. Just to ensure
+//!         our DHT routing table is still useful.
+//!      get_peers:
+//!        the real deal. Iteratively queries DHT nodes and find new sources
+//!        for a particular info-hash.
+//!      announce_peer:
+//!        announce that the peer associated with this node is downloading a
+//!        torrent.
 
 use std::fmt;
 

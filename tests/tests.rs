@@ -34,7 +34,6 @@ async fn announce_and_lookup(addr_family: AddrFamily) {
 
   // Start node A
   let a_socket = UdpSocket::bind(localhost(addr_family)).await.unwrap();
-  dbg!("node a address: {}", a_socket.local_addr().unwrap());
 
   let a_addr = a_socket.local_addr().unwrap();
   let a_node = MainlineDht::builder()
@@ -45,8 +44,8 @@ async fn announce_and_lookup(addr_family: AddrFamily) {
 
   // Start node B
   let b_socket = UdpSocket::bind(localhost(addr_family)).await.unwrap();
-  dbg!("node b address: {}", b_socket.local_addr().unwrap());
 
+  let b_addr = b_socket.local_addr().unwrap();
   let b_node = MainlineDht::builder()
     .add_node(bootstrap_node_addr)
     .set_read_only(false)
@@ -66,7 +65,15 @@ async fn announce_and_lookup(addr_family: AddrFamily) {
 
   // Now perform the lookup by B. It should find A.
   let mut search = b_node.search(the_info_hash, false);
-  assert_eq!(search.next().await, Some(a_addr))
+  assert_eq!(search.next().await, Some(a_addr));
+
+  let the_info_hash = InfoHash::sha1(b"312312321i3o13io2j");
+
+  let mut search = b_node.search(the_info_hash, true);
+  assert_eq!(search.next().await, None);
+
+  let mut search = a_node.search(the_info_hash, false);
+  assert_eq!(search.next().await, Some(b_addr));
 }
 
 #[derive(Copy, Clone)]

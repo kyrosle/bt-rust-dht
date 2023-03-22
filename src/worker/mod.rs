@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 use std::{collections::HashSet, io, net::SocketAddr, time::Duration};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
@@ -99,12 +101,14 @@ pub enum ScheduledTaskCheck {
 
 impl std::fmt::Display for ScheduledTaskCheck {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-      match self {
-        ScheduledTaskCheck::TableRefresh => write!(f, "TableRefresh"),
-        ScheduledTaskCheck::BootstrapTimeout(_) => write!(f, "BootstrapTimeout"),
-        ScheduledTaskCheck::UserBootstrappedTimeout(_) => write!(f, "UserBootstrappedTimeout"),
-        ScheduledTaskCheck::LookupTimeout(_) => write!(f, "LookupTimeout"),
-        ScheduledTaskCheck::LookupEndGame(_) => write!(f, "LookupEndgame"),
+    match self {
+      ScheduledTaskCheck::TableRefresh => write!(f, "TableRefresh"),
+      ScheduledTaskCheck::BootstrapTimeout(_) => write!(f, "BootstrapTimeout"),
+      ScheduledTaskCheck::UserBootstrappedTimeout(_) => {
+        write!(f, "UserBootstrappedTimeout")
+      }
+      ScheduledTaskCheck::LookupTimeout(_) => write!(f, "LookupTimeout"),
+      ScheduledTaskCheck::LookupEndGame(_) => write!(f, "LookupEndgame"),
     }
   }
 }
@@ -135,6 +139,10 @@ pub async fn resolve(
   routers: &HashSet<String>,
   ip_v: IpVersion,
 ) -> HashSet<SocketAddr> {
+  log::debug!(
+    "resolving routers: {:#?}",
+    routers.iter().collect::<Vec<_>>()
+  );
   futures_util::future::join_all(routers.iter().map(tokio::net::lookup_host))
     .await
     .into_iter()

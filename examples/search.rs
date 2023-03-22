@@ -34,6 +34,13 @@ async fn main() {
         .into_iter()
         .map(|addr| addr.to_string()),
     )
+    // .add_routers(
+    //   net::lookup_host(router::RETRACKER)
+    //     .await
+    //     .unwrap()
+    //     .into_iter()
+    //     .map(|addr| addr.to_string()),
+    // )
     .set_read_only(false)
     .start("mainline", socket)
     .unwrap();
@@ -58,6 +65,8 @@ async fn main() {
     );
     return;
   }
+
+  println!("Enter 'h' for helping.");
 
   let mut stdout = io::stdout();
   let mut stdin = BufReader::new(io::stdin());
@@ -87,16 +96,12 @@ async fn handle_command(dht: &MainlineDht, command: &str) -> io::Result<bool> {
       println!("    a <INFO_HASH>   announce the specified info hash");
       println!("    q               quit");
       println!();
-      println!(
-                "
-                Note: <INFO_HASH> can be specified either as a 40-character hexadecimal string or \
-                an arbitrary string prefixed with '#'. In the first case it is interpreted \
-                directly as the info hash, in the second the info hash is obtained by computing a \
-                SHA-1 digest of the string excluding the leading '#' and trimming any leading or \
-                trailing whitespace.
-                "
-            );
-
+      println!("Note:");
+      println!("  <INFO_HASH> can be specified either as a 40-character hexadecimal string or");
+      println!("an arbitrary string prefixed with '#'. In the first case it is interpreted ");
+      println!("directly as the info hash, in the second the info hash is obtained by computing a ");
+      println!("SHA-1 digest of the string excluding the leading '#' and trimming any leading or ");
+      println!("trailing whitespace.");
       Ok(true)
     }
     Ok(Command::Search {
