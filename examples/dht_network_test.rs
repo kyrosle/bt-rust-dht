@@ -17,7 +17,8 @@ async fn main() {
   pretty_env_logger::init();
 
   let bootstrap_router = router::BITTORRENT_DHT;
-  let socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+  // let bootstrap_router = "www.baidu.com:8989";
+  let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
   let socket_addr = socket.local_addr().unwrap();
   log::info!("Starting listening on {}.", socket_addr);
 
@@ -55,23 +56,25 @@ async fn main() {
     if addr.is_ipv6() {
       continue;
     }
-    match socket.connect(addr).await {
-      Ok(_) => {
-        log::info!("Connecting success {}.", addr);
-        socket.send(&message).await.unwrap();
-      }
-      Err(_) => log::error!("Connect failure {}", addr),
-    }
+    socket.send_to(&message, addr).await.unwrap();
+    // match socket.connect(addr).await {
+    //   Ok(_) => {
+    //     log::info!("Connecting success {}.", addr);
+    //     socket.send(&message).await.unwrap();
+    //   }
+    //   Err(_) => log::error!("Connect failure {}", addr),
+    // }
   }
 
   tokio::task::spawn(async move { recv_response(socket).await });
-  // tokio::task::spawn(async move { assert_recv_startup(socket_addr).await });
+  tokio::task::spawn(async move { assert_recv_startup(socket_addr).await });
 
   std::thread::sleep(Duration::from_secs(20));
 }
 
 async fn assert_recv_startup(addr: SocketAddr) {
-  let socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+  log::info!("Sending message to {}", addr);
+  let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
   let socket_addr = socket.local_addr().unwrap();
   log::info!("Startup the interval sending node: {}", socket_addr);
 

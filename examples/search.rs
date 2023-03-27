@@ -24,23 +24,20 @@ async fn main() {
       net::lookup_host(router::BITTORRENT_DHT)
         .await
         .unwrap()
-        .into_iter()
         .map(|addr| addr.to_string()),
     )
     .add_routers(
       net::lookup_host(router::TRANSMISSION_DHT)
         .await
         .unwrap()
-        .into_iter()
         .map(|addr| addr.to_string()),
     )
-    // .add_routers(
-    //   net::lookup_host(router::RETRACKER)
-    //     .await
-    //     .unwrap()
-    //     .into_iter()
-    //     .map(|addr| addr.to_string()),
-    // )
+    .add_routers(
+      net::lookup_host(router::RETRACKER)
+        .await
+        .unwrap()
+        .map(|addr| addr.to_string()),
+    )
     .set_read_only(false)
     .start("mainline", socket)
     .unwrap();
